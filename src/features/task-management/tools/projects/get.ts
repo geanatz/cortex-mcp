@@ -39,16 +39,9 @@ export function createGetProjectTool(storage: Storage) {
           };
         }
 
-        // Get related tasks and subtasks for summary
+        // Get related tasks for summary
         const tasks = await storage.getTasks(project.id);
         const completedTasks = tasks.filter(t => t.completed).length;
-
-        let subtaskSummary = '';
-        if (tasks.length > 0) {
-          const allSubtasks = await storage.getSubtasks(undefined, project.id);
-          const completedSubtasks = allSubtasks.filter(s => s.completed).length;
-          subtaskSummary = `\nSubtasks: ${completedSubtasks}/${allSubtasks.length} completed`;
-        }
 
         return {
           content: [{
@@ -61,7 +54,7 @@ export function createGetProjectTool(storage: Storage) {
 **Last Updated:** ${new Date(project.updatedAt).toLocaleString()}
 
 **Progress Summary:**
-Tasks: ${completedTasks}/${tasks.length} completed${subtaskSummary}
+Total Tasks: ${tasks.length} (${completedTasks} completed)
 
 Use list_tasks with projectId="${project.id}" to see all tasks in this project.`
           }]

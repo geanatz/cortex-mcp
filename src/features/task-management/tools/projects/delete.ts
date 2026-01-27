@@ -52,7 +52,6 @@ export function createDeleteProjectTool(storage: Storage) {
 
         // Get counts for confirmation message
         const tasks = await storage.getTasks(project.id);
-        const subtasks = await storage.getSubtasks(undefined, project.id);
 
         const deleted = await storage.deleteProject(id);
 
@@ -72,7 +71,7 @@ export function createDeleteProjectTool(storage: Storage) {
             text: `✅ Project deleted successfully!
 
 **Deleted:** "${project.name}" (ID: ${project.id})
-**Also deleted:** ${tasks.length} task(s) and ${subtasks.length} subtask(s)
+**Also deleted:** ${tasks.length} task(s)
 
 This action cannot be undone. All data associated with this project has been permanently removed.`
           }]
