@@ -1,5 +1,5 @@
 # .gitignore
-agentic-tools-mcp/
+cortex-mcp/
 /docs
 
 # Dependencies
@@ -72,7 +72,7 @@ jspm_packages/
 .yarn-integrity
 
 # Task management data (project-specific)
-.agentic-tools-mcp/
+.cortex/
 
 # Temporary files
 *.tmp

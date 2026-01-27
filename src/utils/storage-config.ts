@@ -23,12 +23,12 @@ export function parseCommandLineArgs(): StorageConfig {
 
 /**
  * Get the global storage directory path
- * - Windows: C:\Users\{username}\.agentic-tools-mcp\
- * - macOS/Linux: ~/.agentic-tools-mcp/
+ * - Windows: C:\Users\{username}\.cortex\
+ * - macOS/Linux: ~/.cortex/
  */
 export function getGlobalStorageDirectory(): string {
   const userHome = homedir();
-  return join(userHome, '.agentic-tools-mcp');
+  return join(userHome, '.cortex');
 }
 
 /**

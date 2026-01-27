@@ -15,7 +15,7 @@ export class FileStorage implements MemoryStorage {
 
   constructor(workingDirectory: string) {
     this.workingDirectory = workingDirectory;
-    this.storageDir = join(workingDirectory, '.agentic-tools-mcp');
+    this.storageDir = join(workingDirectory, '.cortex');
     this.memoriesDir = join(this.storageDir, 'memories');
   }
 
@@ -31,7 +31,7 @@ export class FileStorage implements MemoryStorage {
     }
 
     try {
-      // Ensure .agentic-tools-mcp directory exists
+      // Ensure .cortex directory exists
       await fs.mkdir(this.storageDir, { recursive: true });
 
       // Ensure memories directory exists

@@ -1,10 +1,10 @@
-# Agentic Tools MCP Server
+# Cortex MCP Server (cortex-mcp)
 
-[![npm version](https://badge.fury.io/js/@pimzino%2Fagentic-tools-mcp.svg)](https://badge.fury.io/js/@pimzino%2Fagentic-tools-mcp)
-[![npm downloads](https://img.shields.io/npm/dm/@pimzino/agentic-tools-mcp.svg)](https://www.npmjs.com/package/@pimzino/agentic-tools-mcp)
-[![GitHub stars](https://img.shields.io/github/stars/Pimzino/agentic-tools-mcp.svg)](https://github.com/Pimzino/agentic-tools-mcp/stargazers)
-[![GitHub license](https://img.shields.io/github/license/Pimzino/agentic-tools-mcp.svg)](https://github.com/Pimzino/agentic-tools-mcp/blob/main/LICENSE)
-[![Node.js Version](https://img.shields.io/node/v/@pimzino/agentic-tools-mcp.svg)](https://nodejs.org/)
+[![npm version](https://badge.fury.io/js/@geanatz%2Fcortex-mcp.svg)](https://badge.fury.io/js/@geanatz%2Fcortex-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/@geanatz/cortex-mcp.svg)](https://www.npmjs.com/package/@geanatz/cortex-mcp)
+[![GitHub stars](https://img.shields.io/github/stars/geanatz/cortex-mcp.svg)](https://github.com/geanatz/cortex-mcp/stargazers)
+[![GitHub license](https://img.shields.io/github/license/geanatz/cortex-mcp.svg)](https://github.com/geanatz/cortex-mcp/blob/main/LICENSE)
+[![Node.js Version](https://img.shields.io/node/v/@geanatz/cortex-mcp.svg)](https://nodejs.org/)
 
 A comprehensive Model Context Protocol (MCP) server providing AI assistants with powerful **advanced task management** and **agent memories** capabilities with **project-specific storage**.
 
@@ -32,7 +32,6 @@ This MCP server is part of a complete task and memory management ecosystem:
 - **Enhanced Status Tracking**: pending, in-progress, blocked, done status workflow
 - **Tag-Based Organization**: Flexible categorization and filtering
 - **Time Tracking**: Estimated and actual hours for project planning
-- **Automatic Migration**: Seamless upgrade from old 3-level to unlimited depth model
 - **Progress Tracking**: Monitor completion status at all hierarchy levels
 - **Project-Specific Storage**: Each working directory has isolated task data
 - **Git-Trackable**: Task data can be committed alongside your code
@@ -61,7 +60,6 @@ This MCP server is part of a complete task and memory management ecosystem:
 - `update_task` - Edit tasks, metadata, or move between hierarchy levels with `parentId`
 - `delete_task` - Delete task and all child tasks recursively
 - `move_task` - Dedicated tool for moving tasks within hierarchy structure
-- `migrate_subtasks` - Automatic migration tool for converting legacy subtasks to unified model
 
 #### Advanced Task Management (AI Agent Tools)
 - `parse_prd` - Parse Product Requirements Documents and automatically generate structured tasks
@@ -70,13 +68,6 @@ This MCP server is part of a complete task and memory management ecosystem:
 - `infer_task_progress` - Analyze codebase to infer task completion status from implementation evidence
 - `research_task` - Guide AI agents to perform comprehensive web research with memory integration
 - `generate_research_queries` - Generate intelligent, targeted web search queries for task research
-
-#### Legacy Subtask Management (Backward Compatibility)
-- `list_subtasks` - View child tasks (legacy compatibility, now uses unified Task model)
-- `create_subtask` - Create child tasks (legacy compatibility, creates tasks with `parentId`)
-- `get_subtask` - Get task information (legacy compatibility for existing subtasks)
-- `update_subtask` - Edit child tasks (legacy compatibility, uses unified Task operations)
-- `delete_subtask` - Delete child tasks (legacy compatibility, deletes tasks recursively)
 
 #### Agent Memory Management
 - `create_memory` - Store new memories with title and detailed content
@@ -92,12 +83,12 @@ This MCP server is part of a complete task and memory management ecosystem:
 
 ### Quick Start
 ```bash
-npx -y @pimzino/agentic-tools-mcp
+npx -y @geanatz/cortex-mcp
 ```
 
 ### Global Installation
 ```bash
-npm install -g @pimzino/agentic-tools-mcp
+npm install -g @geanatz/cortex-mcp
 ```
 
 ## Usage
@@ -107,19 +98,19 @@ npm install -g @pimzino/agentic-tools-mcp
 The MCP server supports two storage modes:
 
 #### 📁 Project-Specific Mode (Default)
-Data is stored in `.agentic-tools-mcp/` subdirectories within each project's working directory.
+Data is stored in `.cortex/` subdirectories within each project's working directory.
 
 ```bash
-npx -y @pimzino/agentic-tools-mcp
+npx -y @geanatz/cortex-mcp
 ```
 
 #### 🌐 Global Directory Mode
 Use the `--claude` flag to store all data in a standardized global directory:
-- **Windows**: `C:\Users\{username}\.agentic-tools-mcp\`
-- **macOS/Linux**: `~/.agentic-tools-mcp/`
+- **Windows**: `C:\Users\{username}\.cortex\`
+- **macOS/Linux**: `~/.cortex/`
 
 ```bash
-npx -y @pimzino/agentic-tools-mcp --claude
+npx -y @geanatz/cortex-mcp --claude
 ```
 
 **When to use `--claude` flag:**
@@ -135,9 +126,9 @@ npx -y @pimzino/agentic-tools-mcp --claude
 ```json
 {
   "mcpServers": {
-    "agentic-tools": {
+    "cortex-mcp": {
       "command": "npx",
-      "args": ["-y", "@pimzino/agentic-tools-mcp"]
+      "args": ["-y", "@geanatz/cortex-mcp"]
     }
   }
 }
@@ -147,9 +138,9 @@ npx -y @pimzino/agentic-tools-mcp --claude
 ```json
 {
   "mcpServers": {
-    "agentic-tools": {
+    "cortex-mcp": {
       "command": "npx",
-      "args": ["-y", "@pimzino/agentic-tools-mcp", "--claude"]
+      "args": ["-y", "@geanatz/cortex-mcp", "--claude"]
     }
   }
 }
@@ -162,15 +153,15 @@ npx -y @pimzino/agentic-tools-mcp --claude
 #### Project-Specific Mode (Default)
 1. Open Augment Settings Panel (gear icon)
 2. Add MCP server:
-   - **Name**: `agentic-tools`
-   - **Command**: `npx -y @pimzino/agentic-tools-mcp`
+   - **Name**: `cortex-mcp`
+   - **Command**: `npx -y @geanatz/cortex-mcp`
 3. Restart VS Code
 
 #### Global Directory Mode
 1. Open Augment Settings Panel (gear icon)
 2. Add MCP server:
-   - **Name**: `agentic-tools`
-   - **Command**: `npx -y @pimzino/agentic-tools-mcp --claude`
+   - **Name**: `cortex-mcp`
+   - **Command**: `npx -y @geanatz/cortex-mcp --claude`
 3. Restart VS Code
 
 **Features Available**: Task management, agent memories, and text-based search capabilities.
@@ -194,12 +185,12 @@ The server uses STDIO transport and can be integrated with any MCP-compatible cl
 
 #### Project-Specific Mode
 ```bash
-npx -y @pimzino/agentic-tools-mcp
+npx -y @geanatz/cortex-mcp
 ```
 
 #### Global Directory Mode
 ```bash
-npx -y @pimzino/agentic-tools-mcp --claude
+npx -y @geanatz/cortex-mcp --claude
 ```
 
 ## Data Models
@@ -240,9 +231,6 @@ npx -y @pimzino/agentic-tools-mcp --claude
   actualHours?: number;          // Actual time spent (hours)
 }
 ```
-
-### Legacy Subtask (Deprecated in v1.8.0)
-The separate Subtask interface has been replaced by the unified Task model. Legacy subtasks are automatically migrated to tasks with `parentId` field. This ensures unlimited hierarchy depth while maintaining all rich features at every level.
 
 ### Memory
 ```typescript
@@ -332,19 +320,21 @@ The separate Subtask interface has been replaced by the unified Task model. Lega
 ## Data Storage
 
 - **Project-specific**: Each working directory has its own isolated task and memory data
-- **File-based**: Task data stored in `.agentic-tools-mcp/tasks/`, memory data in `.agentic-tools-mcp/memories/`
+- **File-based**: Task data stored in `.cortex/tasks/`, memory data in `.cortex/memories/`
 - **Git-trackable**: All data can be committed alongside your project code
 - **Persistent**: All data persists between server restarts
 - **Atomic**: All operations are atomic to prevent data corruption
 - **JSON Storage**: Simple file-based storage for efficient memory organization
-- **Backup-friendly**: Simple file-based storage for easy backup and migration
+- **Backup-friendly**: Simple file-based storage for easy backup
 
-### Storage Structure
+### Storage Structure (v3.0 Architecture)
 ```
 your-project/
-├── .agentic-tools-mcp/
+├── .cortex/
+│   ├── config.json         # Project configuration (v2.0+)
+│   │                       # { version: "3.0.0", projects: [...] }
 │   ├── tasks/              # Task management data for this project
-│   │   └── tasks.json      # Projects, tasks, and subtasks data
+│   │   └── tasks.json      # Tasks only: { tasks: [...] }
 │   └── memories/           # JSON file storage for memories
 │       ├── preferences/    # User preferences category
 │       │   └── User_prefers_concise_technical_responses.json
@@ -357,20 +347,22 @@ your-project/
 └── README.md
 ```
 
+> **Note**: v3.0 uses a separated storage architecture. Projects are stored in `config.json` (configuration data) while tasks are stored in `tasks/tasks.json` (operational data). This follows MCP best practices for separation of concerns.
+
 ### Working Directory Parameter
 All MCP tools require a `workingDirectory` parameter that specifies:
-- Where to store the `.agentic-tools-mcp/` folder (in project-specific mode)
+- Where to store the `.cortex/` folder (in project-specific mode)
 - Which project's task and memory data to access
 - Enables multiple projects to have separate task lists and memory stores
 
-**Note**: When the server is started with the `--claude` flag, the `workingDirectory` parameter is ignored and a global user directory is used instead (`~/.agentic-tools-mcp/` on macOS/Linux or `C:\Users\{username}\.agentic-tools-mcp\` on Windows).
+**Note**: When the server is started with the `--claude` flag, the `workingDirectory` parameter is ignored and a global user directory is used instead (`~/.cortex/` on macOS/Linux or `C:\Users\{username}\.cortex\` on Windows).
 
 ### Benefits of Project-Specific Storage
 - **Git Integration**: Task and memory data can be committed with your code
 - **Team Collaboration**: Share task lists and agent memories via version control
 - **Project Isolation**: Each project has its own task management and memory system
 - **Multi-Project Workflow**: Work on multiple projects simultaneously with isolated memories
-- **Backup & Migration**: File-based storage travels with your code
+- **Portable**: File-based storage travels with your code
 - **Text Search**: Simple content-based memory search for intelligent context retrieval
 - **Agent Continuity**: Persistent agent memories across sessions and deployments
 
@@ -389,7 +381,7 @@ All MCP tools require a `workingDirectory` parameter that specifies:
 ### Building from Source
 ```bash
 git clone <repository>
-cd agentic-tools-mcp
+cd cortex-mcp
 npm install
 npm run build
 npm start
@@ -431,18 +423,18 @@ src/
 
 **"Memory files not found"** (Agent Memories)
 - Ensure the working directory exists and is writable
-- Check that the .agentic-tools-mcp/memories directory was created
+- Check that the .cortex/memories directory was created
 
 ## Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and release notes.
 
-### Current Version: 1.8.0
-- 🚀 **NEW: Unified Task Model**: Single task interface supporting unlimited nesting depth
-- 🚀 **NEW: Unlimited Hierarchy**: Tasks → Subtasks → Sub-subtasks → infinite depth nesting
-- 🚀 **NEW: Automatic Migration**: Seamless upgrade from 3-level to unlimited depth model
-- 🚀 **NEW: Enhanced Tree Display**: Hierarchical visualization with level indicators and unlimited depth
-- 🚀 **NEW: Hierarchy Tools**: `move_task`, `migrate_subtasks` for unlimited depth management
+### Current Version: 3.0.0
+- 🏗️ **Separated Storage Architecture**: Projects in `config.json`, tasks in `tasks/tasks.json`
+- 🚀 **Unified Task Model**: Single task interface supporting unlimited nesting depth
+- 🚀 **Unlimited Hierarchy**: Tasks → Subtasks → Sub-subtasks → infinite depth nesting
+- 🚀 **Enhanced Tree Display**: Hierarchical visualization with level indicators and unlimited depth
+- 🚀 **Hierarchy Tools**: `move_task` for unlimited depth management
 - ✅ **Rich Features at All Levels**: Every task gets priority, complexity, dependencies, tags, and time tracking
 - ✅ **Enhanced Task Management**: Rich metadata with dependencies, priority, complexity, status, tags, and time tracking
 - ✅ **Advanced AI Agent Tools**: PRD parsing, task recommendations, complexity analysis, progress inference, and research guidance
@@ -492,7 +484,7 @@ Contributions are welcome! Please feel free to submit issues and pull requests.
 ### Development Setup
 ```bash
 git clone <repository>
-cd agentic-tools-mcp
+cd cortex-mcp
 npm install
 npm run build
 npm start
@@ -501,7 +493,7 @@ npm start
 ## Related Projects
 
 ### 🖥️ VS Code Extension
-**[Agentic Tools MCP Companion](https://github.com/Pimzino/agentic-tools-mcp-companion)** - A beautiful VS Code extension that provides a GUI interface for this MCP server.
+**[Cortex MCP Companion](https://github.com/geanatz/cortex-mcp-companion)** - A beautiful VS Code extension that provides a GUI interface for this MCP server.
 
 **Key Features:**
 - 🎯 **Visual Task Management**: Rich GUI with enhanced task metadata forms
@@ -530,4 +522,4 @@ For issues and questions, please use the GitHub issue tracker.
 ### Getting Help
 - 🐛 Report bugs via GitHub issues
 - 💡 Request features via GitHub discussions
-- 🖥️ **VS Code Extension Issues**: Report extension-specific issues at [agentic-tools-mcp-companion](https://github.com/Pimzino/agentic-tools-mcp-companion/issues)
+- 🖥️ **VS Code Extension Issues**: Report extension-specific issues at [cortex-mcp-companion](https://github.com/geanatz/cortex-mcp-companion/issues)

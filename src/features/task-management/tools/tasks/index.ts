@@ -114,7 +114,7 @@ function createMoveTaskTool(storage: Storage) {
 
 /**
  * Create all task-related tools
- * Version 2.0: Updated for unified task model with migration and hierarchy tools
+ * Version 3.0: Unified task model with hierarchy tools
  */
 export function createTaskTools(storage: Storage) {
   return {

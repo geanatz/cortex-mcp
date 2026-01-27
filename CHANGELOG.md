@@ -2,65 +2,83 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.8.1] - 2025-06-20
+## [3.0.0] - 2026-01-27
 
-### 🔧 Fixed: Missing Migration Tools for Version 1.8.0
+### 🏗️ Major Architecture Refactor: Separated Storage
 
-This patch release addresses the missing migration tools that were documented but not properly registered in the MCP server, completing the unlimited hierarchy migration functionality introduced in v1.8.0.
+This major release introduces a completely refactored storage architecture following MCP best practices for 2025-2026. Projects are now stored separately from tasks, providing better separation of concerns, improved scalability, and consistency with the memories module.
+
+### ⚠️ Breaking Changes
+
+The storage format has changed. New installations will use the new architecture:
+- Projects stored in `.cortex/config.json`
+- Tasks stored in `.cortex/tasks/tasks.json`
+- All MCP tool interfaces remain 100% compatible
+
+### Changed
+
+#### 🗂️ New Storage Architecture
+```
+.cortex/
+├── config.json     # { version: "3.0.0", projects: [] }
+├── tasks/
+│   └── tasks.json  # { tasks: [] }
+└── memories/       # (unchanged)
+```
+
+#### 🔧 Technical Improvements
+- **Separation of Concerns**: Projects (configuration) are now separate from tasks (operational data)
+- **Atomic Writes**: File operations use temp files with rename for POSIX-atomic writes
+- **Cascade Delete**: Deleting a project automatically removes all associated tasks
+- **Referential Integrity**: Tasks validate that their projectId exists before creation
+- **Consistent Architecture**: Task storage now follows the same pattern as memories storage
 
 ### Added
 
-#### 🚀 Migration Tool Registration
-- **`migrate_subtasks`**: Properly registered migration tool for converting legacy subtasks to unified task model
-- **`move_task`**: Added missing tool for moving tasks within unlimited hierarchy structure
-- **Enhanced `create_task`**: Added missing `parentId` parameter for unlimited nesting depth
-- **Enhanced `update_task`**: Added missing `parentId` parameter for hierarchy reorganization
+#### 📦 New Configuration Model
+- `CortexConfig` interface for `.cortex/config.json` structure
+- `TasksData` interface for tasks-only data structure
+- `CURRENT_CONFIG_VERSION` constant for version tracking
+- `createEmptyConfig()` and `createEmptyTasksData()` factory functions
 
-#### 🎯 Complete Migration Functionality
-- **Automatic Migration**: `migrate_subtasks` tool now available for manual migration execution
-- **Hierarchy Movement**: `move_task` enables flexible task reorganization across unlimited depth
-- **Nested Task Creation**: `create_task` supports unlimited hierarchy with `parentId` parameter
-- **Task Reorganization**: `update_task` allows moving tasks between hierarchy levels
-
-### Fixed
-
-#### 🐛 Migration Tool Registration Issues
-- **Missing Tools**: `migrate_subtasks` and `move_task` were implemented but not registered in server.ts
-- **Incomplete Hierarchy Support**: `create_task` and `update_task` lacked `parentId` parameters
-- **Functionality Gap**: v1.8.0 unlimited hierarchy features were partially inaccessible
-
-#### 📊 Tool Interface Completeness
-- **Parameter Alignment**: All task tools now properly support unlimited hierarchy features
-- **Description Updates**: Enhanced tool descriptions reflect unlimited hierarchy capabilities
-- **Feature Parity**: MCP server now matches the functionality documented in README
+#### 🎯 Enhanced Storage Interface
+- `projectExists(id)` method for referential integrity checks
+- `getVersion()` method for configuration version info
+- `initialize()` method now part of the interface contract
 
 ### Technical Details
 
-#### 🏗️ Server Registration Updates
-- **Tool Registration**: Added 4 missing tool registrations with proper parameter schemas
-- **Parameter Validation**: Full Zod schema validation for all hierarchy-related parameters
-- **Error Handling**: Comprehensive error handling for migration and hierarchy operations
-- **Backward Compatibility**: All changes maintain full backward compatibility
+#### 🏗️ Architecture Rationale
+Based on extensive research of MCP best practices and production MCP servers:
+1. **MCP Configuration Management Best Practice**: "Externalize all configuration"
+2. **Single Responsibility Principle**: Projects are namespace configuration, not operational data
+3. **Scalability**: 10,000 tasks won't slow down project listing
+4. **Consistency**: Memories module already used separated file storage
 
-#### 🔄 Migration Tool Implementation
-- **Status Checking**: Migration tool checks for existing subtasks before proceeding
-- **Data Preservation**: All original task data preserved during migration process
-- **Error Reporting**: Detailed error reporting and troubleshooting guidance
-- **Progress Tracking**: Clear migration progress and completion status reporting
+#### 📁 File Locations
+- Config: `{workingDirectory}/.cortex/config.json`
+- Tasks: `{workingDirectory}/.cortex/tasks/tasks.json`
+- Memories: `{workingDirectory}/.cortex/memories/{category}/{title}.json`
 
-### Migration and Compatibility
+---
 
-#### ✅ Full Compatibility Maintained
-- **No Breaking Changes**: All existing functionality continues to work unchanged
-- **Data Safety**: Migration process preserves all existing data and relationships
-- **Tool Interface**: Existing tool calls continue to work with new parameters being optional
-- **Storage Format**: No changes to underlying storage format or data structure
+## [2.0.0] - 2025-06-20
 
-#### 🎯 Enhanced Migration Experience
-- **Complete Toolset**: All documented v1.8.0 features now fully accessible
-- **User Guidance**: Comprehensive migration instructions and error handling
-- **Status Reporting**: Clear migration status and completion confirmation
-- **Hierarchy Navigation**: Full support for unlimited task nesting and organization
+### 🔧 Task Hierarchy Improvements
+
+### Added
+
+#### 🚀 Hierarchy Tools
+- **`move_task`**: Tool for moving tasks within unlimited hierarchy structure
+- **Enhanced `create_task`**: Added `parentId` parameter for unlimited nesting depth
+- **Enhanced `update_task`**: Added `parentId` parameter for hierarchy reorganization
+
+### Technical Details
+
+#### 🏗️ Hierarchy Features
+- **Hierarchy Movement**: `move_task` enables flexible task reorganization across unlimited depth
+- **Nested Task Creation**: `create_task` supports unlimited hierarchy with `parentId` parameter
+- **Task Reorganization**: `update_task` allows moving tasks between hierarchy levels
 
 ---
 

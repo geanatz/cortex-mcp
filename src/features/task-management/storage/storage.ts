@@ -1,19 +1,39 @@
 import { Project } from '../models/project.js';
 import { Task, TaskHierarchy } from '../models/task.js';
+import { CortexConfig, TasksData, CURRENT_CONFIG_VERSION } from '../models/config.js';
+
+// Re-export config types for convenience
+export { CortexConfig, TasksData, CURRENT_CONFIG_VERSION };
 
 /**
  * Storage interface for the task management system
- * Version 2.0: Updated for unified task model with migration support
+ * 
+ * Version 3.0: Separated architecture
+ * - Projects stored in .cortex/config.json (configuration data)
+ * - Tasks stored in .cortex/tasks/tasks.json (operational data)
+ * 
+ * This follows MCP best practices for:
+ * - Single Responsibility Principle (separate files for different concerns)
+ * - Configuration Management (externalized configuration)
+ * - Referential Integrity (cascade delete on project removal)
  */
 export interface Storage {
-  // Project operations
+  /**
+   * Initialize the storage system
+   */
+  initialize(): Promise<void>;
+
+  // Project operations (stored in config.json)
   getProjects(): Promise<Project[]>;
   getProject(id: string): Promise<Project | null>;
   createProject(project: Project): Promise<Project>;
   updateProject(id: string, updates: Partial<Project>): Promise<Project | null>;
   deleteProject(id: string): Promise<boolean>;
 
-  // Task operations (unified model)
+  // Project validation
+  projectExists(id: string): Promise<boolean>;
+
+  // Task operations (stored in tasks/tasks.json)
   getTasks(projectId?: string, parentId?: string): Promise<Task[]>;
   getTask(id: string): Promise<Task | null>;
   createTask(task: Task): Promise<Task>;
@@ -27,13 +47,7 @@ export interface Storage {
   getTaskChildren(taskId: string): Promise<Task[]>;
   getTaskAncestors(taskId: string): Promise<Task[]>;
   moveTask(taskId: string, newParentId?: string): Promise<Task | null>;
-}
 
-/**
- * Data structure for the storage file
- * Version 2.0: Supports both legacy and unified models during migration
- */
-export interface StorageData {
-  projects: Project[];
-  tasks: Task[];
+  // Configuration info
+  getVersion(): string;
 }

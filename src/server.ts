@@ -61,7 +61,7 @@ async function createMemoryStorage(workingDirectory: string, config: StorageConf
 export async function createServer(config: StorageConfig = { useGlobalDirectory: false }): Promise<McpServer> {
   // Create MCP server with dynamic version from package.json
   const server = new McpServer({
-    name: '@pimzino/agentic-tools-mcp',
+    name: '@geanatz/cortex-mcp',
     version: getVersion()
   });
 

@@ -1,68 +1,186 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { Storage, StorageData } from './storage.js';
+import { Storage, CURRENT_CONFIG_VERSION } from './storage.js';
 import { Project } from '../models/project.js';
 import { Task, TaskHierarchy } from '../models/task.js';
-import { getVersion } from '../../../utils/version.js';
+import {
+  CortexConfig,
+  TasksData,
+  createEmptyConfig,
+  createEmptyTasksData
+} from '../models/config.js';
 
 /**
- * File-based storage implementation using JSON with project-specific directories
- * Version 2.0: Updated for unified task model with migration support
+ * File-based storage implementation using separated JSON files
+ * 
+ * Version 3.0: Separated architecture following MCP best practices
+ * 
+ * Storage Structure:
+ * - .cortex/config.json - Projects and configuration (namespace definitions)
+ * - .cortex/tasks/tasks.json - Task data only (operational data)
+ * 
+ * Features:
+ * - Atomic-ish file writes using temp files
+ * - Cascade delete when removing projects
+ * - Referential integrity validation
  */
 export class FileStorage implements Storage {
   private workingDirectory: string;
-  private storageDir: string;
-  private dataFile: string;
-  private data: StorageData;
+  private cortexDir: string;
+  private configFile: string;
+  private tasksDir: string;
+  private tasksFile: string;
+  
+  // In-memory data
+  private config: CortexConfig;
+  private tasksData: TasksData;
+  
+  // Initialization state
+  private initialized: boolean = false;
 
   constructor(workingDirectory: string) {
     this.workingDirectory = workingDirectory;
-    this.storageDir = join(workingDirectory, '.agentic-tools-mcp', 'tasks');
-    this.dataFile = join(this.storageDir, 'tasks.json');
-    this.data = {
-      projects: [],
-      tasks: []
-    };
+    this.cortexDir = join(workingDirectory, '.cortex');
+    this.configFile = join(this.cortexDir, 'config.json');
+    this.tasksDir = join(this.cortexDir, 'tasks');
+    this.tasksFile = join(this.tasksDir, 'tasks.json');
+    
+    // Initialize with empty data
+    this.config = createEmptyConfig();
+    this.tasksData = createEmptyTasksData();
   }
 
   /**
-   * Initialize storage by validating working directory and loading data from file
+   * Initialize storage by validating working directory and loading data
    */
   async initialize(): Promise<void> {
+    if (this.initialized) {
+      return;
+    }
+
+    // Validate working directory exists
     try {
-      // Validate that working directory exists
       await fs.access(this.workingDirectory);
     } catch (error) {
       throw new Error(`Working directory does not exist or is not accessible: ${this.workingDirectory}`);
     }
 
+    // Ensure directories exist
+    await fs.mkdir(this.cortexDir, { recursive: true });
+    await fs.mkdir(this.tasksDir, { recursive: true });
+
+    // Check for config.json
+    const configExists = await this.fileExists(this.configFile);
+    const tasksExists = await this.fileExists(this.tasksFile);
+
+    if (configExists) {
+      // Load existing data
+      await this.loadConfig();
+      await this.loadTasks();
+    } else if (tasksExists) {
+      // Tasks file exists but no config - load tasks and create empty config
+      await this.loadTasks();
+      this.config = createEmptyConfig();
+      await this.saveConfig();
+    } else {
+      // Fresh installation - create empty files
+      await this.saveConfig();
+      await this.saveTasks();
+    }
+
+    this.initialized = true;
+  }
+
+  /**
+   * Check if a file exists
+   */
+  private async fileExists(filePath: string): Promise<boolean> {
     try {
-      // Ensure .agentic-tools-mcp/tasks directory exists
-      await fs.mkdir(this.storageDir, { recursive: true });
-
-      // Try to load existing data
-      const fileContent = await fs.readFile(this.dataFile, 'utf-8');
-      const loadedData = JSON.parse(fileContent);
-
-      // Ensure migration metadata exists
-      this.data = {
-        projects: loadedData.projects || [],
-        tasks: loadedData.tasks || []
-      };
-    } catch (error) {
-      // File doesn't exist or is invalid, start with empty data
-      await this.save();
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
     }
   }
 
   /**
-   * Save data to file
+   * Load configuration from config.json
    */
-  private async save(): Promise<void> {
-    await fs.writeFile(this.dataFile, JSON.stringify(this.data, null, 2));
+  private async loadConfig(): Promise<void> {
+    try {
+      const content = await fs.readFile(this.configFile, 'utf-8');
+      const data = JSON.parse(content);
+      
+      this.config = {
+        version: data.version || CURRENT_CONFIG_VERSION,
+        projects: data.projects || [],
+        lastModified: data.lastModified
+      };
+    } catch (error) {
+      console.warn('[cortex-mcp] Could not load config, using empty config:', error);
+      this.config = createEmptyConfig();
+    }
   }
 
-    /**
+  /**
+   * Load tasks from tasks/tasks.json
+   */
+  private async loadTasks(): Promise<void> {
+    try {
+      const content = await fs.readFile(this.tasksFile, 'utf-8');
+      const data = JSON.parse(content);
+      
+      this.tasksData = {
+        tasks: data.tasks || []
+      };
+    } catch (error) {
+      console.warn('[cortex-mcp] Could not load tasks, using empty tasks:', error);
+      this.tasksData = createEmptyTasksData();
+    }
+  }
+
+  /**
+   * Save configuration to config.json with atomic-ish write
+   */
+  private async saveConfig(): Promise<void> {
+    this.config.lastModified = new Date().toISOString();
+    const content = JSON.stringify(this.config, null, 2);
+    
+    // Write to temp file first, then rename (atomic on POSIX)
+    const tempFile = this.configFile + '.tmp';
+    try {
+      await fs.writeFile(tempFile, content, 'utf-8');
+      await fs.rename(tempFile, this.configFile);
+    } catch (error) {
+      // Cleanup temp file on error
+      try {
+        await fs.unlink(tempFile);
+      } catch { /* ignore */ }
+      throw error;
+    }
+  }
+
+  /**
+   * Save tasks to tasks/tasks.json with atomic-ish write
+   */
+  private async saveTasks(): Promise<void> {
+    const content = JSON.stringify(this.tasksData, null, 2);
+    
+    // Write to temp file first, then rename (atomic on POSIX)
+    const tempFile = this.tasksFile + '.tmp';
+    try {
+      await fs.writeFile(tempFile, content, 'utf-8');
+      await fs.rename(tempFile, this.tasksFile);
+    } catch (error) {
+      // Cleanup temp file on error
+      try {
+        await fs.unlink(tempFile);
+      } catch { /* ignore */ }
+      throw error;
+    }
+  }
+
+  /**
    * Calculate task level in hierarchy
    */
   private calculateTaskLevel(task: Task): number {
@@ -74,7 +192,7 @@ export class FileStorage implements Storage {
 
     while (currentParentId && !visited.has(currentParentId)) {
       visited.add(currentParentId);
-      const parent = this.data.tasks.find(t => t.id === currentParentId);
+      const parent = this.tasksData.tasks.find(t => t.id === currentParentId);
       if (!parent) break;
       level++;
       currentParentId = parent.parentId;
@@ -87,49 +205,72 @@ export class FileStorage implements Storage {
    * Update task levels for all tasks
    */
   private updateTaskLevels(): void {
-    for (const task of this.data.tasks) {
+    for (const task of this.tasksData.tasks) {
       task.level = this.calculateTaskLevel(task);
     }
   }
 
-  // Project operations
+  // ==================== Configuration Info ====================
+
+  /**
+   * Get current storage version
+   */
+  getVersion(): string {
+    return this.config.version;
+  }
+
+  // ==================== Project Operations ====================
+  // Projects are stored in config.json (configuration data)
+
   async getProjects(): Promise<Project[]> {
-    return [...this.data.projects];
+    return [...this.config.projects];
   }
 
   async getProject(id: string): Promise<Project | null> {
-    return this.data.projects.find(p => p.id === id) || null;
+    return this.config.projects.find(p => p.id === id) || null;
+  }
+
+  async projectExists(id: string): Promise<boolean> {
+    return this.config.projects.some(p => p.id === id);
   }
 
   async createProject(project: Project): Promise<Project> {
-    this.data.projects.push(project);
-    await this.save();
+    this.config.projects.push(project);
+    await this.saveConfig();
     return project;
   }
 
   async updateProject(id: string, updates: Partial<Project>): Promise<Project | null> {
-    const index = this.data.projects.findIndex(p => p.id === id);
+    const index = this.config.projects.findIndex(p => p.id === id);
     if (index === -1) return null;
 
-    this.data.projects[index] = { ...this.data.projects[index], ...updates };
-    await this.save();
-    return this.data.projects[index];
+    this.config.projects[index] = { ...this.config.projects[index], ...updates };
+    await this.saveConfig();
+    return this.config.projects[index];
   }
 
   async deleteProject(id: string): Promise<boolean> {
-    const index = this.data.projects.findIndex(p => p.id === id);
+    const index = this.config.projects.findIndex(p => p.id === id);
     if (index === -1) return false;
 
-    this.data.projects.splice(index, 1);
-    // Also delete all related tasks (including nested ones)
-    await this.deleteTasksByProject(id);
-    await this.save();
+    // Remove project from config
+    this.config.projects.splice(index, 1);
+    
+    // CASCADE DELETE: Remove all tasks belonging to this project
+    const deletedCount = await this.deleteTasksByProject(id);
+    
+    // Save config after cascade delete
+    await this.saveConfig();
+    
+    console.log('[cortex-mcp] Deleted project ' + id + ' and ' + deletedCount + ' associated task(s)');
     return true;
   }
 
-  // Task operations (unified model)
+  // ==================== Task Operations ====================
+  // Tasks are stored in tasks/tasks.json (operational data)
+
   async getTasks(projectId?: string, parentId?: string): Promise<Task[]> {
-    let tasks = [...this.data.tasks];
+    let tasks = [...this.tasksData.tasks];
 
     if (projectId) {
       tasks = tasks.filter(t => t.projectId === projectId);
@@ -145,7 +286,7 @@ export class FileStorage implements Storage {
   }
 
   async getTask(id: string): Promise<Task | null> {
-    const task = this.data.tasks.find(t => t.id === id) || null;
+    const task = this.tasksData.tasks.find(t => t.id === id) || null;
     if (task) {
       task.level = this.calculateTaskLevel(task);
     }
@@ -153,71 +294,78 @@ export class FileStorage implements Storage {
   }
 
   async createTask(task: Task): Promise<Task> {
+    // REFERENTIAL INTEGRITY: Validate project exists
+    const projectExists = await this.projectExists(task.projectId);
+    if (!projectExists) {
+      throw new Error('Project with id ' + task.projectId + ' not found. Cannot create task.');
+    }
+
     // Validate parent exists if specified
     if (task.parentId) {
       const parent = await this.getTask(task.parentId);
       if (!parent) {
-        throw new Error(`Parent task with id ${task.parentId} not found`);
+        throw new Error('Parent task with id ' + task.parentId + ' not found');
       }
       // Ensure task belongs to same project as parent
       if (parent.projectId !== task.projectId) {
-        throw new Error(`Task must belong to same project as parent task`);
+        throw new Error('Task must belong to same project as parent task');
       }
     }
 
     task.level = this.calculateTaskLevel(task);
-    this.data.tasks.push(task);
-    await this.save();
+    this.tasksData.tasks.push(task);
+    await this.saveTasks();
     return task;
   }
 
   async updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
-    const index = this.data.tasks.findIndex(t => t.id === id);
+    const index = this.tasksData.tasks.findIndex(t => t.id === id);
     if (index === -1) return null;
 
-    const task = this.data.tasks[index];
+    const task = this.tasksData.tasks[index];
 
     // If updating parentId, validate the new parent
     if (updates.parentId !== undefined) {
       if (updates.parentId) {
         const parent = await this.getTask(updates.parentId);
         if (!parent) {
-          throw new Error(`Parent task with id ${updates.parentId} not found`);
+          throw new Error('Parent task with id ' + updates.parentId + ' not found');
         }
         // Prevent circular references
         if (await this.wouldCreateCircularReference(id, updates.parentId)) {
-          throw new Error(`Moving task would create a circular reference`);
+          throw new Error('Moving task would create a circular reference');
         }
       }
     }
 
-    this.data.tasks[index] = { ...task, ...updates };
-    this.data.tasks[index].level = this.calculateTaskLevel(this.data.tasks[index]);
-    await this.save();
-    return this.data.tasks[index];
+    this.tasksData.tasks[index] = { ...task, ...updates };
+    this.tasksData.tasks[index].level = this.calculateTaskLevel(this.tasksData.tasks[index]);
+    await this.saveTasks();
+    return this.tasksData.tasks[index];
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    const index = this.data.tasks.findIndex(t => t.id === id);
+    const index = this.tasksData.tasks.findIndex(t => t.id === id);
     if (index === -1) return false;
 
     // Delete all child tasks recursively
     await this.deleteTasksByParent(id);
 
-    this.data.tasks.splice(index, 1);
-    await this.save();
+    // Remove the task itself
+    this.tasksData.tasks.splice(index, 1);
+    await this.saveTasks();
     return true;
   }
 
   async deleteTasksByProject(projectId: string): Promise<number> {
-    const tasksToDelete = this.data.tasks.filter(t => t.projectId === projectId);
-    this.data.tasks = this.data.tasks.filter(t => t.projectId !== projectId);
-    await this.save();
+    const tasksToDelete = this.tasksData.tasks.filter(t => t.projectId === projectId);
+    this.tasksData.tasks = this.tasksData.tasks.filter(t => t.projectId !== projectId);
+    await this.saveTasks();
     return tasksToDelete.length;
   }
 
   async deleteTasksByParent(parentId: string): Promise<number> {
-    const childTasks = this.data.tasks.filter(t => t.parentId === parentId);
+    const childTasks = this.tasksData.tasks.filter(t => t.parentId === parentId);
     let deletedCount = 0;
 
     // Recursively delete children first
@@ -226,15 +374,16 @@ export class FileStorage implements Storage {
     }
 
     // Delete direct children
-    const directChildren = this.data.tasks.filter(t => t.parentId === parentId);
-    this.data.tasks = this.data.tasks.filter(t => t.parentId !== parentId);
+    const directChildren = this.tasksData.tasks.filter(t => t.parentId === parentId);
+    this.tasksData.tasks = this.tasksData.tasks.filter(t => t.parentId !== parentId);
     deletedCount += directChildren.length;
 
-    await this.save();
+    await this.saveTasks();
     return deletedCount;
   }
 
-  // Task hierarchy operations
+  // ==================== Task Hierarchy Operations ====================
+
   async getTaskHierarchy(projectId?: string, parentId?: string): Promise<TaskHierarchy[]> {
     const tasks = await this.getTasks(projectId, parentId);
     const hierarchies: TaskHierarchy[] = [];
@@ -252,7 +401,7 @@ export class FileStorage implements Storage {
   }
 
   async getTaskChildren(taskId: string): Promise<Task[]> {
-    return this.data.tasks.filter(t => t.parentId === taskId);
+    return this.tasksData.tasks.filter(t => t.parentId === taskId);
   }
 
   async getTaskAncestors(taskId: string): Promise<Task[]> {
@@ -295,6 +444,4 @@ export class FileStorage implements Storage {
 
     return false;
   }
-
-  // Migration operations
 }

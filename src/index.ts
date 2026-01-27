@@ -24,20 +24,19 @@ async function main() {
     await server.connect(transport);
 
     // Log server start (to stderr so it doesn't interfere with MCP communication)
-    console.error(`🚀 Agentic Tools MCP Server ${getVersionString()} started successfully`);
+    console.error(`🚀 Cortex MCP Server ${getVersionString()} started successfully`);
 
     // Show storage mode
     if (storageConfig.useGlobalDirectory) {
-      console.error('🌐 Global directory mode: Using ~/.agentic-tools-mcp/ for all data storage');
+      console.error('🌐 Global directory mode: Using ~/.cortex/ for all data storage');
     } else {
-      console.error('📁 Project-specific mode: Using .agentic-tools-mcp/ within each working directory');
+      console.error('📁 Project-specific mode: Using .cortex/ within each working directory');
     }
     console.error('');
 
     console.error('📋 Task Management features available:');
     console.error('   • Project Management (list, create, get, update, delete)');
     console.error('   • Task Management (list, create, get, update, delete)');
-    console.error('   • Subtask Management (list, create, get, update, delete)');
     console.error('');
     console.error('🧠 Agent Memories features available:');
     console.error('   • Memory Management (create, search, get, list, update, delete)');
