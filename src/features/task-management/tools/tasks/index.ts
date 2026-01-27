@@ -6,122 +6,6 @@ import { createListTasksTool } from './list.js';
 import { createUpdateTaskTool } from './update.js';
 
 /**
- * Migration tool for converting subtasks to the unified task model
- * Version 2.0: Added for smooth transition to unlimited hierarchy
- */
-function createMigrateSubtasksTool(storage: Storage) {
-  return {
-    name: 'migrate_subtasks',
-    description: 'Migrate existing subtasks to the unified task model. This tool converts all subtasks to tasks with parentId for unlimited nesting depth. Run this once after upgrading to ensure data compatibility.',
-    inputSchema: {},
-    handler: async () => {
-      try {
-        // Check migration status first
-        const migrationStatus = await storage.getMigrationStatus();
-
-        if (!migrationStatus.needsMigration) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `✅ **Migration Status: Complete**
-
-No migration needed! Your task management system is already using the unified task model.
-
-📊 **Current Status:**
-• Version: ${migrationStatus.version}
-• Subtasks remaining: ${migrationStatus.subtaskCount}
-• System: Up to date
-
-🎯 **You can now enjoy unlimited task nesting!**
-• Use \`create_task\` with \`parentId\` to create nested tasks
-• Use \`list_tasks\` to see the hierarchical tree structure
-• Use \`update_task\` to move tasks between hierarchy levels`
-            }]
-          };
-        }
-
-        // Perform migration
-        const result = await storage.migrateToUnifiedModel();
-
-        if (result.migratedSubtasks === 0 && result.errors.length === 0) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `✅ **Migration Complete: No Data to Migrate**
-
-Your system was already clean - no subtasks found to migrate.
-
-📊 **Migration Summary:**
-• Subtasks migrated: 0
-• Errors: 0
-• Status: ✅ Ready for unlimited hierarchy
-
-🎯 **Next Steps:**
-• Use \`create_task\` with \`parentId\` for nested tasks
-• Use \`list_tasks\` to see hierarchical structures
-• Use \`update_task\` to reorganize your task hierarchy`
-            }]
-          };
-        }
-
-        const errorSummary = result.errors.length > 0
-          ? `\n\n⚠️ **Errors encountered:**\n${result.errors.map(e => `• ${e}`).join('\n')}`
-          : '';
-
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `🎉 **Migration Successful!**
-
-Your subtasks have been successfully converted to the new unified task model with unlimited nesting depth!
-
-📊 **Migration Summary:**
-• Subtasks migrated: ${result.migratedSubtasks}
-• Errors: ${result.errors.length}
-• Status: ✅ Complete${errorSummary}
-
-🚀 **What's New:**
-• **Unlimited Depth**: Create tasks within tasks within tasks (no limits!)
-• **Better Organization**: All tasks now have the same rich features
-• **Flexible Hierarchy**: Easily move tasks between different levels
-
-🎯 **Next Steps:**
-• Use \`list_tasks\` to see your migrated task hierarchy
-• Use \`create_task\` with \`parentId\` to add new nested tasks
-• Use \`update_task\` with \`parentId\` to reorganize existing tasks
-• Explore the new hierarchical structure with \`list_tasks\` and \`showHierarchy: true\`
-
-💡 **Pro Tips:**
-• Set \`parentId\` to create subtasks, sub-subtasks, etc.
-• Leave \`parentId\` empty for top-level tasks
-• Use the \`level\` field to understand task depth
-• All your original task data and features are preserved!`
-            }]
-          };
-      } catch (error: any) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `❌ **Migration Failed**
-
-An error occurred during migration: ${error instanceof Error ? error.message : 'Unknown error'}
-
-🔧 **Troubleshooting:**
-• Ensure you have proper permissions to modify task data
-• Check that your workspace is properly set up
-• Try running the migration again
-• Contact support if the issue persists
-
-⚠️ **Your data is safe** - the migration process preserves all original data.`
-          }],
-          isError: true
-        };
-      }
-    }
-  };
-}
-
-/**
  * Tool for moving tasks within the hierarchy
  * Version 2.0: New tool for unlimited depth task management
  */
@@ -239,7 +123,6 @@ export function createTaskTools(storage: Storage) {
     get_task: createGetTaskTool(storage),
     list_tasks: createListTasksTool(storage),
     update_task: createUpdateTaskTool(storage),
-    migrate_subtasks: createMigrateSubtasksTool(storage),
     move_task: createMoveTaskTool(storage)
   };
 }

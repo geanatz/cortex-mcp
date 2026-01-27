@@ -3,7 +3,6 @@ import { join } from 'path';
 import { Storage, StorageData } from './storage.js';
 import { Project } from '../models/project.js';
 import { Task, TaskHierarchy } from '../models/task.js';
-import { Subtask } from '../models/subtask.js';
 import { getVersion } from '../../../utils/version.js';
 
 /**
@@ -22,11 +21,7 @@ export class FileStorage implements Storage {
     this.dataFile = join(this.storageDir, 'tasks.json');
     this.data = {
       projects: [],
-      tasks: [],
-      subtasks: [],
-      migration: {
-        version: getVersion()
-      }
+      tasks: []
     };
   }
 
@@ -52,22 +47,8 @@ export class FileStorage implements Storage {
       // Ensure migration metadata exists
       this.data = {
         projects: loadedData.projects || [],
-        tasks: loadedData.tasks || [],
-        subtasks: loadedData.subtasks || [],
-        migration: loadedData.migration || { version: getVersion() }
+        tasks: loadedData.tasks || []
       };
-
-      // Check if migration is needed
-      const migrationStatus = await this.getMigrationStatus();
-      if (migrationStatus.needsMigration) {
-        console.log(`Migration needed: ${migrationStatus.subtaskCount} subtasks to migrate`);
-        // Auto-migrate on load
-        const result = await this.migrateToUnifiedModel();
-        console.log(`Migration completed: ${result.migratedSubtasks} subtasks migrated`);
-        if (result.errors.length > 0) {
-          console.warn('Migration errors:', result.errors);
-        }
-      }
     } catch (error) {
       // File doesn't exist or is invalid, start with empty data
       await this.save();
@@ -316,147 +297,4 @@ export class FileStorage implements Storage {
   }
 
   // Migration operations
-  async migrateToUnifiedModel(): Promise<{ migratedSubtasks: number; errors: string[] }> {
-    const errors: string[] = [];
-    let migratedCount = 0;
-
-    if (!this.data.subtasks || this.data.subtasks.length === 0) {
-      // Update migration metadata
-      this.data.migration = {
-        version: getVersion(),
-        migratedAt: new Date().toISOString(),
-        subtasksMigrated: 0
-      };
-      await this.save();
-      return { migratedSubtasks: 0, errors: [] };
-    }
-
-    for (const subtask of this.data.subtasks) {
-      try {
-        // Convert subtask to task
-        const task: Task = {
-          id: subtask.id,
-          name: subtask.name,
-          details: subtask.details,
-          projectId: subtask.projectId,
-          parentId: subtask.taskId, // taskId becomes parentId
-          completed: subtask.completed,
-          createdAt: subtask.createdAt,
-          updatedAt: subtask.updatedAt,
-          // Set reasonable defaults for new fields
-          priority: 5,
-          complexity: 3,
-          status: subtask.completed ? 'done' : 'pending'
-        };
-
-        // Verify parent task exists
-        const parentExists = this.data.tasks.find(t => t.id === task.parentId);
-        if (!parentExists) {
-          errors.push(`Parent task ${task.parentId} not found for subtask ${subtask.id}`);
-          continue;
-        }
-
-        // Add to tasks array
-        this.data.tasks.push(task);
-        migratedCount++;
-      } catch (error) {
-        errors.push(`Failed to migrate subtask ${subtask.id}: ${error}`);
-      }
-    }
-
-    // Clear subtasks array and update migration metadata
-    this.data.subtasks = [];
-    this.data.migration = {
-      version: getVersion(),
-      migratedAt: new Date().toISOString(),
-      subtasksMigrated: migratedCount
-    };
-
-    await this.save();
-    return { migratedSubtasks: migratedCount, errors };
-  }
-
-  async getMigrationStatus(): Promise<{ needsMigration: boolean; subtaskCount: number; version: string }> {
-    const subtaskCount = this.data.subtasks?.length || 0;
-    const needsMigration = subtaskCount > 0;
-    const version = this.data.migration?.version || 'unknown';
-
-    return { needsMigration, subtaskCount, version };
-  }
-
-  // Legacy subtask operations (deprecated, for backward compatibility)
-  /** @deprecated Use getTasks with parentId instead */
-  async getSubtasks(taskId?: string, projectId?: string): Promise<Subtask[]> {
-    if (!this.data.subtasks) return [];
-
-    let subtasks = [...this.data.subtasks];
-
-    if (taskId) {
-      subtasks = subtasks.filter(s => s.taskId === taskId);
-    }
-
-    if (projectId) {
-      subtasks = subtasks.filter(s => s.projectId === projectId);
-    }
-
-    return subtasks;
-  }
-
-  /** @deprecated Use getTask instead */
-  async getSubtask(id: string): Promise<Subtask | null> {
-    if (!this.data.subtasks) return null;
-    return this.data.subtasks.find(s => s.id === id) || null;
-  }
-
-  /** @deprecated Use createTask instead */
-  async createSubtask(subtask: Subtask): Promise<Subtask> {
-    if (!this.data.subtasks) this.data.subtasks = [];
-    this.data.subtasks.push(subtask);
-    await this.save();
-    return subtask;
-  }
-
-  /** @deprecated Use updateTask instead */
-  async updateSubtask(id: string, updates: Partial<Subtask>): Promise<Subtask | null> {
-    if (!this.data.subtasks) return null;
-
-    const index = this.data.subtasks.findIndex(s => s.id === id);
-    if (index === -1) return null;
-
-    this.data.subtasks[index] = { ...this.data.subtasks[index], ...updates };
-    await this.save();
-    return this.data.subtasks[index];
-  }
-
-  /** @deprecated Use deleteTask instead */
-  async deleteSubtask(id: string): Promise<boolean> {
-    if (!this.data.subtasks) return false;
-
-    const index = this.data.subtasks.findIndex(s => s.id === id);
-    if (index === -1) return false;
-
-    this.data.subtasks.splice(index, 1);
-    await this.save();
-    return true;
-  }
-
-  /** @deprecated Use deleteTasksByParent instead */
-  async deleteSubtasksByTask(taskId: string): Promise<number> {
-    if (!this.data.subtasks) return 0;
-
-    const subtasksToDelete = this.data.subtasks.filter(s => s.taskId === taskId);
-    this.data.subtasks = this.data.subtasks.filter(s => s.taskId !== taskId);
-    await this.save();
-    return subtasksToDelete.length;
-  }
-
-  /** @deprecated Use deleteTasksByProject instead */
-  async deleteSubtasksByProject(projectId: string): Promise<number> {
-    if (!this.data.subtasks) return 0;
-
-    const subtasksToDelete = this.data.subtasks.filter(s => s.projectId === projectId);
-    this.data.subtasks = this.data.subtasks.filter(s => s.projectId !== projectId);
-    await this.save();
-    return subtasksToDelete.length;
-  }
 }

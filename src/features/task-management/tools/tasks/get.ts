@@ -43,14 +43,14 @@ export function createGetTaskTool(storage: Storage) {
         const project = await storage.getProject(task.projectId);
         const projectName = project ? project.name : 'Unknown Project';
 
-        // Get related subtasks for summary
-        const subtasks = await storage.getSubtasks(task.id);
-        const completedSubtasks = subtasks.filter(s => s.completed).length;
+        // Get related child tasks for summary
+        const childTasks = await storage.getTaskChildren(task.id);
+        const completedChildren = childTasks.filter(t => t.completed).length;
 
         const status = task.completed ? '✅ Completed' : '⏳ Pending';
-        const subtaskSummary = subtasks.length > 0
-          ? `\n**Subtasks:** ${completedSubtasks}/${subtasks.length} completed`
-          : '\n**Subtasks:** None';
+        const childTaskSummary = childTasks.length > 0
+          ? `\n**Child Tasks:** ${completedChildren}/${childTasks.length} completed`
+          : '\n**Child Tasks:** None';
 
         return {
           content: [{
@@ -62,9 +62,9 @@ export function createGetTaskTool(storage: Storage) {
 **Details:** ${task.details}
 
 **Created:** ${new Date(task.createdAt).toLocaleString()}
-**Last Updated:** ${new Date(task.updatedAt).toLocaleString()}${subtaskSummary}
+**Last Updated:** ${new Date(task.updatedAt).toLocaleString()}${childTaskSummary}
 
-Use list_subtasks with taskId="${task.id}" to see all subtasks for this task.`
+Use list_tasks with parentId="${task.id}" to see all child tasks for this task.`
           }]
         };
       } catch (error) {

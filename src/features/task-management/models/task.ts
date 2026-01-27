@@ -92,21 +92,6 @@ export interface UpdateTaskInput {
 }
 
 /**
- * Legacy subtask interface for migration compatibility
- * @deprecated Use Task with parentId instead
- */
-export interface LegacySubtask {
-  id: string;
-  name: string;
-  details: string;
-  taskId: string;
-  projectId: string;
-  completed: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
  * Task hierarchy helper types
  */
 export interface TaskHierarchy {

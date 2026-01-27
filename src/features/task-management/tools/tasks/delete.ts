@@ -54,8 +54,8 @@ export function createDeleteTaskTool(storage: Storage) {
         const project = await storage.getProject(task.projectId);
         const projectName = project ? project.name : 'Unknown Project';
 
-        // Get count of subtasks for confirmation message
-        const subtasks = await storage.getSubtasks(task.id);
+        // Get count of child tasks for confirmation message
+        const childTasks = await storage.getTaskChildren(task.id);
 
         const deleted = await storage.deleteTask(id);
 
@@ -76,7 +76,7 @@ export function createDeleteTaskTool(storage: Storage) {
 
 **Deleted:** "${task.name}" (ID: ${task.id})
 **Project:** ${projectName}
-**Also deleted:** ${subtasks.length} subtask(s)
+**Also deleted:** ${childTasks.length} child task(s)
 
 This action cannot be undone. All data associated with this task has been permanently removed.`
           }]

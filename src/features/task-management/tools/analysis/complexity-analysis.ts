@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { Task, CreateTaskInput } from '../../models/task.js';
 import { Storage } from '../../storage/storage.js';
 
@@ -349,16 +350,21 @@ async function autoCreateSubtasksFromSuggestions(
 ): Promise<void> {
   for (const task of complexTasks) {
     for (const suggestion of task.suggestions) {
-      // Create as subtask
-      await storage.createSubtask({
-        id: '', // Will be generated
+      // Create as child task
+      await storage.createTask({
+        id: randomUUID(),
         name: suggestion.name,
         details: suggestion.details,
-        taskId: task.id,
+        parentId: task.id,
         projectId: task.projectId,
         completed: false,
         createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        priority: suggestion.priority,
+        complexity: suggestion.complexity,
+        tags: suggestion.tags,
+        estimatedHours: suggestion.estimatedHours,
+        status: 'pending'
       });
     }
   }
@@ -412,13 +418,13 @@ ${task.suggestions.map(s => `   • ${s.name} (Est: ${s.estimatedHours}h)`).join
     let new_guidance = "\n👉 **Your Actions: Address Complex Tasks & Proceed**\n\n";
     if (!autoCreated) { // autoCreated is the autoCreateSubtasks boolean
         new_guidance += "1.  **Break Down Complex Tasks:** For each complex task listed above, review the \"Suggested Breakdown.\" " +
-                       "You can create these as subtasks using the \`create_subtask\` tool or simplify the main task using \`update_task\`.\n" +
-                       "    *   Example for \`create_subtask\`: \`create_subtask({ taskId: \"task_id_from_above\", name: \"suggested_subtask_name\", details: \"...\" })\`\n" +
+                       "You can create these as child tasks using the \`create_task\` tool with \`parentId\` or simplify the main task using \`update_task\`.\n" +
+                       "    *   Example for \`create_task\`: \`create_task({ projectId: \"project_id\", parentId: \"task_id_from_above\", name: \"suggested_subtask_name\", details: \"...\" })\`\n" +
                        "    *   Example for \`update_task\`: \`update_task({ id: \"task_id_from_above\", details: \"simplified_details\", complexity: new_lower_complexity })\`\n\n";
     } else {
-        new_guidance += "1.  **Review Auto-Created Subtasks:** Subtasks have been automatically created based on the suggestions. " +
-                       "Review them using \`list_subtasks\` and refine them if necessary using \`update_subtask\`.\n" +
-                       "    *   Example: \`list_subtasks({ taskId: \"task_id_from_above\" })\`\n\n";
+        new_guidance += "1.  **Review Auto-Created Subtasks:** Child tasks have been automatically created based on the suggestions. " +
+                       "Review them using \`list_tasks\` with \`parentId\` and refine them if necessary using \`update_task\`.\n" +
+                       "    *   Example: \`list_tasks({ parentId: \"task_id_from_above\", projectId: \"project_id\" })\`\n\n";
     }
 
     new_guidance += "2.  **Re-analyze (Optional):** After addressing the complexities, you can re-run this analysis for a specific task to confirm its new complexity score.\n" +

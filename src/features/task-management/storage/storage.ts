@@ -1,6 +1,5 @@
 import { Project } from '../models/project.js';
-import { Task, LegacySubtask, TaskHierarchy } from '../models/task.js';
-import { Subtask } from '../models/subtask.js';
+import { Task, TaskHierarchy } from '../models/task.js';
 
 /**
  * Storage interface for the task management system
@@ -28,26 +27,6 @@ export interface Storage {
   getTaskChildren(taskId: string): Promise<Task[]>;
   getTaskAncestors(taskId: string): Promise<Task[]>;
   moveTask(taskId: string, newParentId?: string): Promise<Task | null>;
-
-  // Legacy subtask operations (deprecated, for migration only)
-  /** @deprecated Use getTasks with parentId instead */
-  getSubtasks(taskId?: string, projectId?: string): Promise<Subtask[]>;
-  /** @deprecated Use getTask instead */
-  getSubtask(id: string): Promise<Subtask | null>;
-  /** @deprecated Use createTask instead */
-  createSubtask(subtask: Subtask): Promise<Subtask>;
-  /** @deprecated Use updateTask instead */
-  updateSubtask(id: string, updates: Partial<Subtask>): Promise<Subtask | null>;
-  /** @deprecated Use deleteTask instead */
-  deleteSubtask(id: string): Promise<boolean>;
-  /** @deprecated Use deleteTasksByParent instead */
-  deleteSubtasksByTask(taskId: string): Promise<number>;
-  /** @deprecated Use deleteTasksByProject instead */
-  deleteSubtasksByProject(projectId: string): Promise<number>;
-
-  // Migration operations
-  migrateToUnifiedModel(): Promise<{ migratedSubtasks: number; errors: string[] }>;
-  getMigrationStatus(): Promise<{ needsMigration: boolean; subtaskCount: number; version: string }>;
 }
 
 /**
@@ -57,12 +36,4 @@ export interface Storage {
 export interface StorageData {
   projects: Project[];
   tasks: Task[];
-  /** @deprecated Legacy subtasks, will be migrated to tasks */
-  subtasks?: Subtask[];
-  /** Migration metadata */
-  migration?: {
-    version: string;
-    migratedAt?: string;
-    subtasksMigrated?: number;
-  };
 }
