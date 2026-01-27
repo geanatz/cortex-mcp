@@ -1,5 +1,5 @@
 {
-  "name": "@pimzino/agentic-tools-mcp",
+  "name": "@geanatz/cortex-mcp",
   "version": "1.8.1",
   "description": "A comprehensive MCP server for task management and agent memories with JSON file storage",
   "main": "dist/index.js",
