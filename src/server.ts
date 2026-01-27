@@ -5,9 +5,8 @@ import { getVersion } from './utils/version.js';
 import { StorageConfig, resolveWorkingDirectory, getWorkingDirectoryDescription } from './utils/storage-config.js';
 import { z } from 'zod';
 
-// Project tools
-import { createListProjectsTool } from './features/task-management/tools/projects/list.js';
 import { createCreateProjectTool } from './features/task-management/tools/projects/create.js';
+
 import { createGetProjectTool } from './features/task-management/tools/projects/get.js';
 import { createUpdateProjectTool } from './features/task-management/tools/projects/update.js';
 import { createDeleteProjectTool } from './features/task-management/tools/projects/delete.js';
@@ -66,28 +65,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
   });
 
   // Register project management tools
-  server.tool(
-    'list_projects',
-    'Discover and overview all your projects with comprehensive details and progress insights. Perfect for getting a bird\'s-eye view of your work portfolio, tracking project status, and quickly navigating between different initiatives in your workspace with project-specific storage.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config))
-    },
-    async ({ workingDirectory }: { workingDirectory: string }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createListProjectsTool(storage);
-        return await tool.handler();
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
+
 
   server.tool(
     'create_project',
@@ -118,14 +96,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'get_project',
     'Access comprehensive project details including metadata, creation dates, and current status. Essential for project analysis, reporting, and understanding project context when planning tasks or reviewing progress in your development workflow.',
     {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      id: z.string().describe('The unique identifier of the project to retrieve')
+      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config))
     },
-    async ({ workingDirectory, id }: { workingDirectory: string; id: string }) => {
+    async ({ workingDirectory }: { workingDirectory: string }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createGetProjectTool(storage);
-        return await tool.handler({ id });
+        return await tool.handler();
       } catch (error) {
         return {
           content: [{
@@ -143,15 +120,14 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'Evolve and refine your project information as requirements change and scope develops. Maintain accurate project documentation with flexible updates to names and descriptions, ensuring your project data stays current and meaningful throughout the development lifecycle.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      id: z.string().describe('The unique identifier of the project to update'),
       name: z.string().optional().describe('New name for the project (optional)'),
       description: z.string().optional().describe('New description for the project (optional)')
     },
-    async ({ workingDirectory, id, name, description }: { workingDirectory: string; id: string; name?: string; description?: string }) => {
+    async ({ workingDirectory, name, description }: { workingDirectory: string; name?: string; description?: string }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createUpdateProjectTool(storage);
-        return await tool.handler({ id, name, description });
+        return await tool.handler({ name, description });
       } catch (error) {
         return {
           content: [{
@@ -169,14 +145,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'Safely remove completed or obsolete projects from your workspace with built-in confirmation safeguards. Permanently cleans up project data while protecting against accidental deletions, helping maintain an organized and current project portfolio.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      id: z.string().describe('The unique identifier of the project to delete'),
       confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
     },
-    async ({ workingDirectory, id, confirm }: { workingDirectory: string; id: string; confirm: boolean }) => {
+    async ({ workingDirectory, confirm }: { workingDirectory: string; confirm: boolean }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createDeleteProjectTool(storage);
-        return await tool.handler({ id, confirm });
+        return await tool.handler({ confirm });
       } catch (error) {
         return {
           content: [{
@@ -195,14 +170,12 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'Explore and organize your task portfolio with intelligent filtering and comprehensive progress tracking. View all tasks across projects or focus on specific project tasks, perfect for sprint planning, progress reviews, and maintaining productivity momentum.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      projectId: z.string().describe('ID of the project to list tasks for'),
       parentId: z.string().optional().describe('Filter to tasks under this parent (optional)'),
       showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format (default: true)'),
       includeCompleted: z.boolean().optional().describe('Include completed tasks in results (default: true)')
     },
-    async ({ workingDirectory, projectId, parentId, showHierarchy, includeCompleted }: {
+    async ({ workingDirectory, parentId, showHierarchy, includeCompleted }: {
       workingDirectory: string;
-      projectId: string;
       parentId?: string;
       showHierarchy?: boolean;
       includeCompleted?: boolean;
@@ -210,7 +183,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createListTasksTool(storage);
-        return await tool.handler({ projectId, parentId, showHierarchy, includeCompleted });
+        return await tool.handler({ parentId, showHierarchy, includeCompleted });
       } catch (error) {
         return {
           content: [{
@@ -230,7 +203,6 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       name: z.string().describe('The name/title of the new task'),
       details: z.string().describe('Detailed description of what the task involves'),
-      projectId: z.string().describe('The ID of the project this task belongs to'),
       parentId: z.string().optional().describe('Parent task ID for unlimited nesting (optional - creates top-level task if not specified)'),
       dependsOn: z.array(z.string()).optional().describe('Array of task IDs that must be completed before this task'),
       priority: z.number().min(1).max(10).optional().describe('Task priority level (1-10, where 10 is highest priority)'),
@@ -239,11 +211,10 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       tags: z.array(z.string()).optional().describe('Tags for categorization and filtering'),
       estimatedHours: z.number().min(0).optional().describe('Estimated time to complete in hours')
     },
-    async ({ workingDirectory, name, details, projectId, parentId, dependsOn, priority, complexity, status, tags, estimatedHours }: {
+    async ({ workingDirectory, name, details, parentId, dependsOn, priority, complexity, status, tags, estimatedHours }: {
       workingDirectory: string;
       name: string;
       details: string;
-      projectId: string;
       parentId?: string;
       dependsOn?: string[];
       priority?: number;
@@ -255,7 +226,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createCreateTaskTool(storage);
-        return await tool.handler({ name, details, projectId, parentId, dependsOn, priority, complexity, status, tags, estimatedHours });
+        return await tool.handler({ name, details, parentId, dependsOn, priority, complexity, status, tags, estimatedHours });
       } catch (error) {
         return {
           content: [{
@@ -426,7 +397,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
 
         // Build path information
         const ancestors = await storage.getTaskAncestors(movedTask.id);
-        const project = await storage.getProject(movedTask.projectId);
+        const project = await storage.getProject();
         const projectName = project?.name || 'Unknown Project';
 
         const oldPath = oldParent
@@ -656,15 +627,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'Parse a Product Requirements Document (PRD) and automatically generate structured tasks with dependencies, priorities, and complexity estimates. Transform high-level requirements into actionable task breakdowns with intelligent analysis.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      projectId: z.string().describe('ID of the project to add tasks to'),
       prdContent: z.string().describe('Content of the Product Requirements Document to parse'),
       generateSubtasks: z.boolean().optional().default(true).describe('Whether to generate subtasks for complex tasks'),
       defaultPriority: z.number().min(1).max(10).optional().default(5).describe('Default priority for generated tasks (1-10)'),
       estimateComplexity: z.boolean().optional().default(true).describe('Whether to estimate complexity for tasks')
     },
-    async ({ workingDirectory, projectId, prdContent, generateSubtasks, defaultPriority, estimateComplexity }: {
+    async ({ workingDirectory, prdContent, generateSubtasks, defaultPriority, estimateComplexity }: {
       workingDirectory: string;
-      projectId: string;
       prdContent: string;
       generateSubtasks?: boolean;
       defaultPriority?: number;
@@ -673,7 +642,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createParsePRDTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, projectId, prdContent, generateSubtasks, defaultPriority, estimateComplexity });
+        return await tool.handler({ workingDirectory, prdContent, generateSubtasks, defaultPriority, estimateComplexity });
       } catch (error) {
         return {
           content: [{
@@ -691,15 +660,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'Get intelligent recommendations for the next task to work on based on dependencies, priorities, complexity, and current project status. Smart task recommendation engine for optimal workflow management and productivity.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      projectId: z.string().optional().describe('Filter recommendations to a specific project'),
       maxRecommendations: z.number().min(1).max(10).optional().default(3).describe('Maximum number of task recommendations to return'),
       considerComplexity: z.boolean().optional().default(true).describe('Whether to factor in task complexity for recommendations'),
       preferredTags: z.array(z.string()).optional().describe('Preferred task tags to prioritize in recommendations'),
       excludeBlocked: z.boolean().optional().default(true).describe('Whether to exclude blocked tasks from recommendations')
     },
-    async ({ workingDirectory, projectId, maxRecommendations, considerComplexity, preferredTags, excludeBlocked }: {
+    async ({ workingDirectory, maxRecommendations, considerComplexity, preferredTags, excludeBlocked }: {
       workingDirectory: string;
-      projectId?: string;
       maxRecommendations?: number;
       considerComplexity?: boolean;
       preferredTags?: string[];
@@ -708,7 +675,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createNextTaskRecommendationTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, projectId, maxRecommendations, considerComplexity, preferredTags, excludeBlocked });
+        return await tool.handler({ workingDirectory, maxRecommendations, considerComplexity, preferredTags, excludeBlocked });
       } catch (error) {
         return {
           content: [{
@@ -727,15 +694,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       taskId: z.string().optional().describe('Specific task ID to analyze (if not provided, analyzes all tasks)'),
-      projectId: z.string().optional().describe('Filter analysis to a specific project'),
       complexityThreshold: z.number().min(1).max(10).optional().default(7).describe('Complexity threshold above which tasks should be broken down'),
       suggestBreakdown: z.boolean().optional().default(true).describe('Whether to suggest specific task breakdowns'),
       autoCreateSubtasks: z.boolean().optional().default(false).describe('Whether to automatically create suggested subtasks')
     },
-    async ({ workingDirectory, taskId, projectId, complexityThreshold, suggestBreakdown, autoCreateSubtasks }: {
+    async ({ workingDirectory, taskId, complexityThreshold, suggestBreakdown, autoCreateSubtasks }: {
       workingDirectory: string;
       taskId?: string;
-      projectId?: string;
       complexityThreshold?: number;
       suggestBreakdown?: boolean;
       autoCreateSubtasks?: boolean;
@@ -743,7 +708,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createComplexityAnalysisTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, taskId, projectId, complexityThreshold, suggestBreakdown, autoCreateSubtasks });
+        return await tool.handler({ workingDirectory, taskId, complexityThreshold, suggestBreakdown, autoCreateSubtasks });
       } catch (error) {
         return {
           content: [{

@@ -14,7 +14,6 @@ export function createComplexityAnalysisTool(storage: Storage, getWorkingDirecto
     inputSchema: z.object({
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       taskId: z.string().optional().describe('Specific task ID to analyze (if not provided, analyzes all tasks)'),
-      projectId: z.string().optional().describe('Filter analysis to a specific project'),
       complexityThreshold: z.number().min(1).max(10).optional().default(7).describe('Complexity threshold above which tasks should be broken down'),
       suggestBreakdown: z.boolean().optional().default(true).describe('Whether to suggest specific task breakdowns'),
       autoCreateSubtasks: z.boolean().optional().default(false).describe('Whether to automatically create suggested subtasks')
@@ -24,7 +23,6 @@ export function createComplexityAnalysisTool(storage: Storage, getWorkingDirecto
         const {
           workingDirectory,
           taskId,
-          projectId,
           complexityThreshold,
           suggestBreakdown,
           autoCreateSubtasks
@@ -45,16 +43,9 @@ export function createComplexityAnalysisTool(storage: Storage, getWorkingDirecto
             };
           }
           tasksToAnalyze = [task];
-        } else if (projectId) {
-          // Analyze all tasks in project
-          tasksToAnalyze = await storage.getTasks(projectId);
         } else {
-          // Analyze all tasks across all projects
-          const projects = await storage.getProjects();
-          for (const project of projects) {
-            const projectTasks = await storage.getTasks(project.id);
-            tasksToAnalyze.push(...projectTasks);
-          }
+          // Analyze all tasks
+          tasksToAnalyze = await storage.getTasks();
         }
 
         if (tasksToAnalyze.length === 0) {
@@ -295,7 +286,6 @@ function generateTaskBreakdownSuggestions(task: Task): CreateTaskInput[] {
       suggestions.push({
         name: pattern.suggestion.name,
         details: pattern.suggestion.details,
-        projectId: task.projectId,
         priority: task.priority,
         complexity: Math.max(1, (task.complexity || 5) - 2),
         tags: pattern.suggestion.tags,
@@ -311,7 +301,6 @@ function generateTaskBreakdownSuggestions(task: Task): CreateTaskInput[] {
       {
         name: `Planning Phase: ${task.name}`,
         details: `Plan and design approach for: ${task.details.substring(0, 200)}`,
-        projectId: task.projectId,
         priority: task.priority,
         complexity: Math.max(1, (task.complexity || 5) - 3),
         tags: ['planning'],
@@ -320,8 +309,6 @@ function generateTaskBreakdownSuggestions(task: Task): CreateTaskInput[] {
       {
         name: `Implementation Phase: ${task.name}`,
         details: `Implement core functionality for: ${task.details.substring(0, 200)}`,
-        projectId: task.projectId,
-        priority: task.priority,
         complexity: Math.max(1, (task.complexity || 5) - 2),
         tags: ['implementation'],
         estimatedHours: Math.round(baseHours * 2)
@@ -329,8 +316,6 @@ function generateTaskBreakdownSuggestions(task: Task): CreateTaskInput[] {
       {
         name: `Testing Phase: ${task.name}`,
         details: `Test and validate implementation for: ${task.details.substring(0, 200)}`,
-        projectId: task.projectId,
-        priority: task.priority,
         complexity: Math.max(1, (task.complexity || 5) - 3),
         tags: ['testing'],
         estimatedHours: Math.round(baseHours)
@@ -356,7 +341,6 @@ async function autoCreateSubtasksFromSuggestions(
         name: suggestion.name,
         details: suggestion.details,
         parentId: task.id,
-        projectId: task.projectId,
         completed: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

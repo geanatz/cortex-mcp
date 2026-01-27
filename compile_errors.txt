@@ -1,0 +1,19 @@
+src/features/task-management/tools/analysis/complexity-analysis.ts(312,9): error TS2353: Object literal may only specify known properties, and 'projectId' does not exist in type 'CreateTaskInput'.
+src/features/task-management/tools/analysis/complexity-analysis.ts(312,25): error TS2339: Property 'projectId' does not exist on type 'Task'.
+src/features/task-management/tools/analysis/complexity-analysis.ts(320,25): error TS2339: Property 'projectId' does not exist on type 'Task'.
+src/features/task-management/tools/analysis/complexity-analysis.ts(346,9): error TS2353: Object literal may only specify known properties, and 'projectId' does not exist in type 'Task'.
+src/features/task-management/tools/analysis/complexity-analysis.ts(346,25): error TS2339: Property 'projectId' does not exist on type 'Task & { suggestions: CreateTaskInput[]; }'.
+src/features/task-management/tools/analysis/progress-inference.ts(44,21): error TS2304: Cannot find name 'projectId'.
+src/features/task-management/tools/analysis/progress-inference.ts(423,74): error TS2339: Property 'projectId' does not exist on type 'Task'.
+src/features/task-management/tools/projects/get.ts(42,33): error TS2339: Property 'createdAt' does not exist on type 'Project'.
+src/features/task-management/tools/projects/get.ts(43,38): error TS2339: Property 'updatedAt' does not exist on type 'Project'.
+src/features/task-management/tools/tasks/create.ts(155,16): error TS2304: Cannot find name 'project'.
+src/features/task-management/tools/tasks/create.ts(156,16): error TS2304: Cannot find name 'project'.
+src/features/task-management/tools/tasks/create.ts(167,12): error TS2304: Cannot find name 'project'.
+src/features/task-management/tools/tasks/delete.ts(54,50): error TS2554: Expected 0 arguments, but got 1.
+src/features/task-management/tools/tasks/delete.ts(54,55): error TS2339: Property 'projectId' does not exist on type 'Task'.
+src/features/task-management/tools/tasks/update.ts(168,68): error TS2339: Property 'projectId' does not exist on type 'Task'.
+src/features/task-management/tools/tasks/update.ts(168,79): error TS2554: Expected 0-1 arguments, but got 2.
+src/features/task-management/tools/tasks/update.ts(273,50): error TS2554: Expected 0 arguments, but got 1.
+src/features/task-management/tools/tasks/update.ts(273,62): error TS2339: Property 'projectId' does not exist on type 'Task'.
+src/server.ts(105,35): error TS2554: Expected 0 arguments, but got 1.

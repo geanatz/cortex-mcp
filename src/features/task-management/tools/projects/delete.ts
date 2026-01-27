@@ -12,22 +12,10 @@ export function createDeleteProjectTool(storage: Storage) {
     name: 'delete_project',
     description: 'Delete a project and all its associated tasks and subtasks. This action cannot be undone.',
     inputSchema: {
-      id: z.string(),
       confirm: z.boolean()
     },
-    handler: async ({ id, confirm }: { id: string; confirm: boolean }) => {
+    handler: async ({ confirm }: { confirm: boolean }) => {
       try {
-        // Validate inputs
-        if (!id || id.trim().length === 0) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Project ID is required.'
-            }],
-            isError: true
-          };
-        }
-
         if (confirm !== true) {
           return {
             content: [{
@@ -38,28 +26,28 @@ export function createDeleteProjectTool(storage: Storage) {
           };
         }
 
-        const project = await storage.getProject(id.trim());
+        const project = await storage.getProject();
 
         if (!project) {
           return {
             content: [{
               type: 'text' as const,
-              text: `Error: Project with ID "${id}" not found. Use list_projects to see all available projects.`
+              text: 'Error: No project initialized to delete.'
             }],
             isError: true
           };
         }
 
         // Get counts for confirmation message
-        const tasks = await storage.getTasks(project.id);
+        const tasks = await storage.getTasks();
 
-        const deleted = await storage.deleteProject(id);
+        const deleted = await storage.deleteProject();
 
         if (!deleted) {
           return {
             content: [{
               type: 'text' as const,
-              text: `Error: Failed to delete project with ID "${id}".`
+              text: 'Error: Failed to delete project.'
             }],
             isError: true
           };

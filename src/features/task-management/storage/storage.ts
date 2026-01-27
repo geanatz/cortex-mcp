@@ -24,26 +24,24 @@ export interface Storage {
   initialize(): Promise<void>;
 
   // Project operations (stored in config.json)
-  getProjects(): Promise<Project[]>;
-  getProject(id: string): Promise<Project | null>;
+  getProject(): Promise<Project | null>;
   createProject(project: Project): Promise<Project>;
-  updateProject(id: string, updates: Partial<Project>): Promise<Project | null>;
-  deleteProject(id: string): Promise<boolean>;
+  updateProject(updates: Partial<Project>): Promise<Project | null>;
+  deleteProject(): Promise<boolean>;
 
   // Project validation
-  projectExists(id: string): Promise<boolean>;
+  hasProject(): Promise<boolean>;
 
   // Task operations (stored in tasks/tasks.json)
-  getTasks(projectId?: string, parentId?: string): Promise<Task[]>;
+  getTasks(parentId?: string): Promise<Task[]>;
   getTask(id: string): Promise<Task | null>;
   createTask(task: Task): Promise<Task>;
   updateTask(id: string, updates: Partial<Task>): Promise<Task | null>;
   deleteTask(id: string): Promise<boolean>;
-  deleteTasksByProject(projectId: string): Promise<number>;
   deleteTasksByParent(parentId: string): Promise<number>;
 
   // Task hierarchy operations
-  getTaskHierarchy(projectId?: string, parentId?: string): Promise<TaskHierarchy[]>;
+  getTaskHierarchy(parentId?: string): Promise<TaskHierarchy[]>;
   getTaskChildren(taskId: string): Promise<Task[]>;
   getTaskAncestors(taskId: string): Promise<Task[]>;
   moveTask(taskId: string, newParentId?: string): Promise<Task | null>;

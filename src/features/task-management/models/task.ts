@@ -9,8 +9,6 @@ export interface Task {
   name: string;
   /** Enhanced task description */
   details: string;
-  /** Reference to parent project */
-  projectId: string;
   /** Reference to parent task (null for top-level tasks) */
   parentId?: string;
   /** Task completion status */
@@ -45,8 +43,6 @@ export interface CreateTaskInput {
   name: string;
   /** Enhanced task description */
   details: string;
-  /** Reference to parent project */
-  projectId: string;
   /** Reference to parent task (optional, null for top-level tasks) */
   parentId?: string;
   /** Task dependencies - IDs of tasks that must be completed before this task */

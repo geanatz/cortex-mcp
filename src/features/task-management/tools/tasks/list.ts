@@ -12,27 +12,25 @@ import { Task } from '../../models/task.js';
 export function createListTasksTool(storage: Storage) {
   return {
     name: 'list_tasks',
-    description: 'View tasks in hierarchical tree format. Filter by projectId (required) and/or parentId. Use parentId=null for top-level tasks, or specific parentId for subtasks.',
+    description: 'View tasks in hierarchical tree format. Filter by parentId. Use parentId=null for top-level tasks, or specific parentId for subtasks.',
     inputSchema: {
-      projectId: z.string(),
       parentId: z.string().optional(),
       showHierarchy: z.boolean().optional(),
       includeCompleted: z.boolean().optional()
     },
-    handler: async ({ projectId, parentId, showHierarchy = true, includeCompleted = true }: {
-      projectId: string;
+    handler: async ({ parentId, showHierarchy = true, includeCompleted = true }: {
       parentId?: string;
       showHierarchy?: boolean;
       includeCompleted?: boolean;
     }) => {
       try {
         // Validate project exists
-        const project = await storage.getProject(projectId);
+        const project = await storage.getProject();
         if (!project) {
           return {
             content: [{
               type: 'text' as const,
-              text: `Error: Project with ID "${projectId}" not found. Use list_projects to see all available projects.`
+              text: 'Error: No project initialized. Use create_project to start.'
             }],
             isError: true
           };
@@ -55,7 +53,7 @@ export function createListTasksTool(storage: Storage) {
 
         if (showHierarchy) {
           // Show full hierarchy starting from parentId (or root if not specified)
-          const hierarchy = await storage.getTaskHierarchy(projectId, parentId);
+          const hierarchy = await storage.getTaskHierarchy(parentId);
 
           if (hierarchy.length === 0) {
             const scopeDescription = parentTask
@@ -137,7 +135,7 @@ ${hierarchyText}
           };
         } else {
           // Show flat list for specific parent level
-          const tasks = await storage.getTasks(projectId, parentId);
+          const tasks = await storage.getTasks(parentId);
 
           if (tasks.length === 0) {
             const scopeDescription = parentTask

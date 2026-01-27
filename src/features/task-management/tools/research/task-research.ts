@@ -100,10 +100,10 @@ Once your research is complete and findings are stored:
 
 2.  **Analyze Complexity & Breakdown (If Needed):** If the research suggests the task is significantly more complex than initially thought, it might need to be broken down.
     *   You can use \`analyze_task_complexity\` to get suggestions: \`analyze_task_complexity({ taskId: "${task.id}" })\`
-    *   Alternatively, create nested tasks using \`create_task\` with parentId: \`create_task({ projectId: "${task.projectId}", parentId: "${task.id}", name: "subtask_name", details: "..." })\`
+    *   Alternatively, create nested tasks using \`create_task\` with parentId: \`create_task({ parentId: "${task.id}", name: "subtask_name", details: "..." })\`
 
 3.  **Determine Next Task:** To see what task (including potentially this one, if it's now unblocked or its priority has increased) is best to work on next, use the \`get_next_task_recommendation\` tool.
-    *   Example: \`get_next_task_recommendation({ projectId: "${task.projectId}" })\``;
+    *   Example: \`get_next_task_recommendation({ })\``;
 
         return {
           content: [{
@@ -324,7 +324,7 @@ After completing your research for each major area, use the \`create_memory\` to
 **Example Memory Creation:**
 \`\`\`
 create_memory({
-  workingDirectory: "${task.projectId}",
+  workingDirectory: ".",
   title: "${task.name} - Implementation Guide",
   content: "Based on research findings: [your detailed research summary]",
   category: "task_research",

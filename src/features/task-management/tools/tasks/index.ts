@@ -67,7 +67,7 @@ function createMoveTaskTool(storage: Storage) {
 
         // Build path information
         const ancestors = await storage.getTaskAncestors(movedTask.id);
-        const project = await storage.getProject(movedTask.projectId);
+        const project = await storage.getProject();
         const projectName = project?.name || 'Unknown Project';
 
         const oldPath = oldParent

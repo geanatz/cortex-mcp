@@ -60,27 +60,23 @@ export function createCreateProjectTool(storage: Storage) {
           };
         }
 
-        // Validate that project name is unique
-        const existingProjects = await storage.getProjects();
-        const nameExists = existingProjects.some(p => p.name.toLowerCase() === name.trim().toLowerCase());
-
-        if (nameExists) {
+        // Validate that no project exists
+        const hasProject = await storage.hasProject();
+        if (hasProject) {
+          const existing = await storage.getProject();
           return {
             content: [{
               type: 'text' as const,
-              text: `Error: A project with the name "${name.trim()}" already exists. Please choose a different name.`
+              text: `Error: A project already exists (${existing?.name}). This workspace supports only one project. Use 'update_project' to modify it.`
             }],
             isError: true
           };
         }
 
-        const now = new Date().toISOString();
         const project: Project = {
           id: randomUUID(),
           name: name.trim(),
-          description: description.trim(),
-          createdAt: now,
-          updatedAt: now
+          description: description.trim()
         };
 
         const createdProject = await storage.createProject(project);
@@ -88,13 +84,12 @@ export function createCreateProjectTool(storage: Storage) {
         return {
           content: [{
             type: 'text' as const,
-            text: `✅ Project created successfully!
+            text: `✅ Project initialized successfully!
 
-**${createdProject.name}** (ID: ${createdProject.id})
+**${createdProject.name}**
 Description: ${createdProject.description}
-Created: ${new Date(createdProject.createdAt).toLocaleString()}
 
-You can now add tasks to this project using the create_task tool.`
+You can now add tasks.`
           }]
         };
       } catch (error) {

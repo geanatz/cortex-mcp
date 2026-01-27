@@ -8,10 +8,6 @@ export interface Project {
   name: string;
   /** Project description/overview */
   description: string;
-  /** Timestamp when the project was created */
-  createdAt: string;
-  /** Timestamp when the project was last updated */
-  updatedAt: string;
 }
 
 /**

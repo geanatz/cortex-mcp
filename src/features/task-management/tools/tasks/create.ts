@@ -17,7 +17,6 @@ export function createCreateTaskTool(storage: Storage) {
     inputSchema: {
       name: z.string(),
       details: z.string(),
-      projectId: z.string(),
       parentId: z.string().optional(),
       dependsOn: z.array(z.string()).optional(),
       priority: z.number().min(1).max(10).optional(),
@@ -26,10 +25,9 @@ export function createCreateTaskTool(storage: Storage) {
       tags: z.array(z.string()).optional(),
       estimatedHours: z.number().min(0).optional()
     },
-    handler: async ({ name, details, projectId, parentId, dependsOn, priority, complexity, status, tags, estimatedHours }: {
+    handler: async ({ name, details, parentId, dependsOn, priority, complexity, status, tags, estimatedHours }: {
       name: string;
       details: string;
-      projectId: string;
       parentId?: string;
       dependsOn?: string[];
       priority?: number;
@@ -80,28 +78,6 @@ export function createCreateTaskTool(storage: Storage) {
           };
         }
 
-        if (!projectId || projectId.trim().length === 0) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Project ID is required.'
-            }],
-            isError: true
-          };
-        }
-
-        // Validate that project exists
-        const project = await storage.getProject(projectId.trim());
-        if (!project) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: Project with ID "${projectId}" not found. Use list_projects to see all available projects.`
-            }],
-            isError: true
-          };
-        }
-
         let parentTask = null;
         let taskLevel = 0;
 
@@ -118,28 +94,18 @@ export function createCreateTaskTool(storage: Storage) {
             };
           }
 
-          // Ensure parent belongs to the same project
-          if (parentTask.projectId !== projectId) {
-            return {
-              content: [{
-                type: 'text' as const,
-                text: `Error: Parent task belongs to a different project. Tasks can only be nested within the same project.`
-              }],
-              isError: true
-            };
-          }
-
           taskLevel = (parentTask.level || 0) + 1;
         }
 
         // Check for duplicate task names within the same parent scope
-        const siblingTasks = await storage.getTasks(projectId, parentId);
+        const siblingTasks = await storage.getTasks(parentId);
         const nameExists = siblingTasks.some(t => t.name.toLowerCase() === name.toLowerCase());
 
         if (nameExists) {
+          const project = await storage.getProject();
           const scopeDescription = parentTask
             ? `under parent task "${parentTask.name}"`
-            : `at the top level of project "${project.name}"`;
+            : `at the top level of project "${project?.name || 'Current Project'}"`;
           return {
             content: [{
               type: 'text' as const,
@@ -170,7 +136,6 @@ export function createCreateTaskTool(storage: Storage) {
           id: randomUUID(),
           name: name.trim(),
           details: details.trim(),
-          projectId,
           parentId: parentId?.trim() || undefined,
           completed: false,
           createdAt: now,
@@ -185,10 +150,11 @@ export function createCreateTaskTool(storage: Storage) {
         };
 
         const createdTask = await storage.createTask(task);
+        const project = await storage.getProject();
 
         const hierarchyPath = parentTask
-          ? `${project.name} → ${parentTask.name} → ${createdTask.name}`
-          : `${project.name} → ${createdTask.name}`;
+          ? `${project?.name || 'Project'} → ${parentTask.name} → ${createdTask.name}`
+          : `${project?.name || 'Project'} → ${createdTask.name}`;
 
         const levelIndicator = '  '.repeat(taskLevel) + '→';
 
@@ -199,7 +165,7 @@ export function createCreateTaskTool(storage: Storage) {
 
 **${levelIndicator} ${createdTask.name}** (ID: ${createdTask.id})
 ${parentTask ? `Parent: ${parentTask.name} (${parentTask.id})` : 'Top-level task'}
-Project: ${project.name}
+Project: ${project?.name || 'Current Project'}
 Level: ${taskLevel} ${taskLevel === 0 ? '(Top-level)' : `(${taskLevel} level${taskLevel > 1 ? 's' : ''} deep)`}
 Path: ${hierarchyPath}
 

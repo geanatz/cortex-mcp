@@ -14,7 +14,6 @@ export function createProgressInferenceTool(storage: Storage, getWorkingDirector
     description: 'Analyze the codebase to infer which tasks appear to be completed based on code changes, file creation, and implementation evidence. Intelligent progress inference feature for automatic task completion tracking.',
     inputSchema: z.object({
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      projectId: z.string().optional().describe('Filter analysis to a specific project'),
       scanDepth: z.number().min(1).max(5).optional().default(3).describe('Directory depth to scan for code files'),
       fileExtensions: z.array(z.string()).optional().default(['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.go', '.rs']).describe('File extensions to analyze'),
       autoUpdateTasks: z.boolean().optional().default(false).describe('Whether to automatically update task status based on inference'),
@@ -24,7 +23,6 @@ export function createProgressInferenceTool(storage: Storage, getWorkingDirector
       try {
         const {
           workingDirectory,
-          projectId,
           scanDepth,
           fileExtensions,
           autoUpdateTasks,
@@ -32,16 +30,7 @@ export function createProgressInferenceTool(storage: Storage, getWorkingDirector
         } = args;
 
         // Get tasks to analyze
-        let tasksToAnalyze: Task[] = [];
-        if (projectId) {
-          tasksToAnalyze = await storage.getTasks(projectId);
-        } else {
-          const projects = await storage.getProjects();
-          for (const project of projects) {
-            const projectTasks = await storage.getTasks(project.id);
-            tasksToAnalyze.push(...projectTasks);
-          }
-        }
+        const tasksToAnalyze = await storage.getTasks();
 
         // Filter out already completed tasks
         const incompleteTasks = tasksToAnalyze.filter(task =>
@@ -52,9 +41,7 @@ export function createProgressInferenceTool(storage: Storage, getWorkingDirector
           return {
             content: [{
               type: 'text' as const,
-              text: projectId
-                ? `No incomplete tasks found in the specified project.`
-                : `No incomplete tasks found across all projects.`
+              text: `No incomplete tasks found.`
             }]
           };
         }
@@ -431,8 +418,7 @@ ${lowConfidence.slice(0, 5).map(r =>
   }
 
   // Determine a relevant projectId for examples, if possible
-  const relevantProjectIds = [...new Set(analysisResults.map(r => r.task.projectId))];
-  const exampleProjectId = relevantProjectIds.length === 1 ? relevantProjectIds[0] : "project_id_if_known";
+  const exampleProjectId = "current_project";
 
   let new_guidance = "\n👉 **Your Actions: Verify Progress and Update Tasks**\n\n";
 

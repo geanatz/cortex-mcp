@@ -14,7 +14,6 @@ export function createParsePRDTool(storage: Storage, getWorkingDirectoryDescript
     description: 'Parse a Product Requirements Document (PRD) and automatically generate structured tasks with dependencies, priorities, and complexity estimates. This tool analyzes PRD content and creates a comprehensive task breakdown with intelligent analysis.',
     inputSchema: z.object({
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      projectId: z.string().describe('ID of the project to add tasks to'),
       prdContent: z.string().describe('Content of the Product Requirements Document to parse'),
       generateSubtasks: z.boolean().optional().default(true).describe('Whether to generate subtasks for complex tasks'),
       defaultPriority: z.number().min(1).max(10).optional().default(5).describe('Default priority for generated tasks (1-10)'),
@@ -22,22 +21,22 @@ export function createParsePRDTool(storage: Storage, getWorkingDirectoryDescript
     }),
     handler: async (args: any) => {
       try {
-        const { workingDirectory, projectId, prdContent, generateSubtasks, defaultPriority, estimateComplexity } = args;
+        const { workingDirectory, prdContent, generateSubtasks, defaultPriority, estimateComplexity } = args;
 
         // Validate project exists
-        const project = await storage.getProject(projectId);
+        const project = await storage.getProject();
         if (!project) {
           return {
             content: [{
               type: 'text' as const,
-              text: `Error: Project with ID "${projectId}" not found.`
+              text: 'Error: No project initialized. Use create_project to start.'
             }],
             isError: true
           };
         }
 
         // Parse PRD content and extract tasks
-        const parsedTasks = await parsePRDContent(prdContent, projectId, defaultPriority, estimateComplexity);
+        const parsedTasks = await parsePRDContent(prdContent, defaultPriority, estimateComplexity);
 
         // Create tasks in storage
         const createdTasks: Task[] = [];
@@ -49,7 +48,6 @@ export function createParsePRDTool(storage: Storage, getWorkingDirectoryDescript
             id: randomUUID(),
             name: taskData.name,
             details: taskData.details,
-            projectId,
             parentId: taskData.parentId,
             completed: false,
             createdAt: now,
@@ -92,10 +90,10 @@ export function createParsePRDTool(storage: Storage, getWorkingDirectoryDescript
     *   Example: \`update_task({ id: "task_id_to_update", name: "new_task_name", details: "updated_details", priority: 7 })\`
 
 2.  **Create Nested Tasks:** For complex tasks, you can break them down further using \`create_task\` with parentId.
-    *   Example: \`create_task({ projectId: "${project.id}", parentId: "parent_task_id", name: "subtask_name", details: "subtask_details" })\`
+    *   Example: \`create_task({ parentId: "parent_task_id", name: "subtask_name", details: "subtask_details" })\`
 
 3.  **Identify Starting Task:** Once you are satisfied with the task definitions, use the \`get_next_task_recommendation\` tool to identify the best task to begin with in this project.
-    *   Example: \`get_next_task_recommendation({ projectId: "${project.id}" })\`
+    *   Example: \`get_next_task_recommendation({ })\`
 
 4.  **Begin Implementation:** After getting a recommendation, you can start working on the suggested task. Remember to update its status using \`update_task\` (e.g., set to 'in-progress').`;
 
@@ -123,7 +121,7 @@ export function createParsePRDTool(storage: Storage, getWorkingDirectoryDescript
  * Parse PRD content and extract task information
  * This is a simplified parser - in a real implementation, you might use NLP or LLM APIs
  */
-async function parsePRDContent(prdContent: string, projectId: string, defaultPriority: number, estimateComplexity: boolean): Promise<CreateTaskInput[]> {
+async function parsePRDContent(prdContent: string, defaultPriority: number, estimateComplexity: boolean): Promise<CreateTaskInput[]> {
   const tasks: CreateTaskInput[] = [];
 
   // Simple parsing logic - look for common patterns in PRDs
@@ -165,7 +163,6 @@ async function parsePRDContent(prdContent: string, projectId: string, defaultPri
             tasks.push({
               name: taskName.trim(),
               details: taskDetails,
-              projectId,
               priority: defaultPriority,
               complexity,
               tags,
@@ -182,7 +179,6 @@ async function parsePRDContent(prdContent: string, projectId: string, defaultPri
     tasks.push({
       name: 'Implement PRD Requirements',
       details: prdContent.substring(0, 1000),
-      projectId,
       priority: defaultPriority,
       complexity: estimateComplexity ? 7 : undefined,
       tags: ['implementation', 'prd'],

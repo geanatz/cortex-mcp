@@ -12,7 +12,6 @@ export function createNextTaskRecommendationTool(storage: Storage, getWorkingDir
     description: 'Get intelligent recommendations for the next task to work on based on dependencies, priorities, complexity, and current project status. Smart task recommendation engine for optimal workflow management.',
     inputSchema: z.object({
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      projectId: z.string().optional().describe('Filter recommendations to a specific project'),
       maxRecommendations: z.number().min(1).max(10).optional().default(3).describe('Maximum number of task recommendations to return'),
       considerComplexity: z.boolean().optional().default(true).describe('Whether to factor in task complexity for recommendations'),
       preferredTags: z.array(z.string()).optional().describe('Preferred task tags to prioritize in recommendations'),
@@ -22,25 +21,20 @@ export function createNextTaskRecommendationTool(storage: Storage, getWorkingDir
       try {
         const {
           workingDirectory,
-          projectId,
           maxRecommendations,
           considerComplexity,
           preferredTags,
           excludeBlocked
         } = args;
 
-        // Get all tasks, optionally filtered by project
-        const allTasks = projectId
-          ? await storage.getTasks(projectId)
-          : await getAllTasksAcrossProjects(storage);
+        // Get all tasks
+        const allTasks = await storage.getTasks();
 
         if (allTasks.length === 0) {
           return {
             content: [{
               type: 'text' as const,
-              text: projectId
-                ? `No tasks found in the specified project.`
-                : `No tasks found. Create some tasks first using \`create_task\` or \`parse_prd\`.`
+              text: `No tasks found. Create some tasks first using \`create_task\`.`
             }]
           };
         }
@@ -97,21 +91,6 @@ ${generateTaskStatusSummary(allTasks)}
       }
     }
   };
-}
-
-/**
- * Get all tasks across all projects
- */
-async function getAllTasksAcrossProjects(storage: Storage): Promise<Task[]> {
-  const projects = await storage.getProjects();
-  const allTasks: Task[] = [];
-
-  for (const project of projects) {
-    const projectTasks = await storage.getTasks(project.id);
-    allTasks.push(...projectTasks);
-  }
-
-  return allTasks;
 }
 
 /**

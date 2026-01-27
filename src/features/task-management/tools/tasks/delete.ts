@@ -51,7 +51,7 @@ export function createDeleteTaskTool(storage: Storage) {
         }
 
         // Get project information for display
-        const project = await storage.getProject(task.projectId);
+        const project = await storage.getProject();
         const projectName = project ? project.name : 'Unknown Project';
 
         // Get count of child tasks for confirmation message

@@ -76,16 +76,17 @@ export class FileStorage implements Storage {
     if (configExists) {
       // Load existing data
       await this.loadConfig();
-      await this.loadTasks();
+      if (tasksExists) {
+        await this.loadTasks();
+      }
     } else if (tasksExists) {
       // Tasks file exists but no config - load tasks and create empty config
       await this.loadTasks();
       this.config = createEmptyConfig();
       await this.saveConfig();
     } else {
-      // Fresh installation - create empty files
+      // Fresh installation - create config only
       await this.saveConfig();
-      await this.saveTasks();
     }
 
     this.initialized = true;
@@ -111,11 +112,27 @@ export class FileStorage implements Storage {
       const content = await fs.readFile(this.configFile, 'utf-8');
       const data = JSON.parse(content);
       
-      this.config = {
-        version: data.version || CURRENT_CONFIG_VERSION,
-        projects: data.projects || [],
-        lastModified: data.lastModified
-      };
+      // Handle legacy structure (projects array or nested project object) if necessary,
+      // or just assume new structure. 
+      // For compatibility with previous turn's "project" object:
+      if (data.project) {
+        this.config = {
+            version: data.version || CURRENT_CONFIG_VERSION,
+            id: data.project.id,
+            name: data.project.name,
+            description: data.project.description,
+            lastModified: data.lastModified
+        };
+      } else {
+        // Flat structure
+        this.config = {
+          version: data.version || CURRENT_CONFIG_VERSION,
+          id: data.id,
+          name: data.name,
+          description: data.description,
+          lastModified: data.lastModified
+        };
+      }
     } catch (error) {
       console.warn('[cortex-mcp] Could not load config, using empty config:', error);
       this.config = createEmptyConfig();
@@ -220,61 +237,62 @@ export class FileStorage implements Storage {
   }
 
   // ==================== Project Operations ====================
-  // Projects are stored in config.json (configuration data)
+  // Project is stored in config.json (configuration data)
 
-  async getProjects(): Promise<Project[]> {
-    return [...this.config.projects];
+  async getProject(): Promise<Project | null> {
+    if (!this.config.id || !this.config.name) return null;
+    return {
+        id: this.config.id,
+        name: this.config.name,
+        description: this.config.description || ''
+    };
   }
 
-  async getProject(id: string): Promise<Project | null> {
-    return this.config.projects.find(p => p.id === id) || null;
-  }
-
-  async projectExists(id: string): Promise<boolean> {
-    return this.config.projects.some(p => p.id === id);
+  async hasProject(): Promise<boolean> {
+    return !!(this.config.id && this.config.name);
   }
 
   async createProject(project: Project): Promise<Project> {
-    this.config.projects.push(project);
+    this.config.id = project.id;
+    this.config.name = project.name;
+    this.config.description = project.description;
     await this.saveConfig();
     return project;
   }
 
-  async updateProject(id: string, updates: Partial<Project>): Promise<Project | null> {
-    const index = this.config.projects.findIndex(p => p.id === id);
-    if (index === -1) return null;
+  async updateProject(updates: Partial<Project>): Promise<Project | null> {
+    if (!this.config.id) return null;
 
-    this.config.projects[index] = { ...this.config.projects[index], ...updates };
+    if (updates.name) this.config.name = updates.name;
+    if (updates.description) this.config.description = updates.description;
+    // user explicitly removed createdAt/updatedAt from config
+    
     await this.saveConfig();
-    return this.config.projects[index];
+    return this.getProject();
   }
 
-  async deleteProject(id: string): Promise<boolean> {
-    const index = this.config.projects.findIndex(p => p.id === id);
-    if (index === -1) return false;
-
-    // Remove project from config
-    this.config.projects.splice(index, 1);
+  async deleteProject(): Promise<boolean> {
+    if (!this.config.id) return false;
     
-    // CASCADE DELETE: Remove all tasks belonging to this project
-    const deletedCount = await this.deleteTasksByProject(id);
+    delete this.config.id;
+    delete this.config.name;
+    delete this.config.description;
     
-    // Save config after cascade delete
     await this.saveConfig();
     
-    console.log('[cortex-mcp] Deleted project ' + id + ' and ' + deletedCount + ' associated task(s)');
+    // Also clear tasks for this project
+    this.tasksData.tasks = [];
+    await this.saveTasks();
+    
+    console.log('[cortex-mcp] Deleted project and all associated tasks');
     return true;
   }
 
   // ==================== Task Operations ====================
   // Tasks are stored in tasks/tasks.json (operational data)
 
-  async getTasks(projectId?: string, parentId?: string): Promise<Task[]> {
+  async getTasks(parentId?: string): Promise<Task[]> {
     let tasks = [...this.tasksData.tasks];
-
-    if (projectId) {
-      tasks = tasks.filter(t => t.projectId === projectId);
-    }
 
     if (parentId !== undefined) {
       tasks = tasks.filter(t => t.parentId === parentId);
@@ -295,9 +313,8 @@ export class FileStorage implements Storage {
 
   async createTask(task: Task): Promise<Task> {
     // REFERENTIAL INTEGRITY: Validate project exists
-    const projectExists = await this.projectExists(task.projectId);
-    if (!projectExists) {
-      throw new Error('Project with id ' + task.projectId + ' not found. Cannot create task.');
+    if (!this.config.id) {
+      throw new Error('No project initialized. Cannot create task.');
     }
 
     // Validate parent exists if specified
@@ -305,10 +322,6 @@ export class FileStorage implements Storage {
       const parent = await this.getTask(task.parentId);
       if (!parent) {
         throw new Error('Parent task with id ' + task.parentId + ' not found');
-      }
-      // Ensure task belongs to same project as parent
-      if (parent.projectId !== task.projectId) {
-        throw new Error('Task must belong to same project as parent task');
       }
     }
 
@@ -357,13 +370,6 @@ export class FileStorage implements Storage {
     return true;
   }
 
-  async deleteTasksByProject(projectId: string): Promise<number> {
-    const tasksToDelete = this.tasksData.tasks.filter(t => t.projectId === projectId);
-    this.tasksData.tasks = this.tasksData.tasks.filter(t => t.projectId !== projectId);
-    await this.saveTasks();
-    return tasksToDelete.length;
-  }
-
   async deleteTasksByParent(parentId: string): Promise<number> {
     const childTasks = this.tasksData.tasks.filter(t => t.parentId === parentId);
     let deletedCount = 0;
@@ -384,12 +390,12 @@ export class FileStorage implements Storage {
 
   // ==================== Task Hierarchy Operations ====================
 
-  async getTaskHierarchy(projectId?: string, parentId?: string): Promise<TaskHierarchy[]> {
-    const tasks = await this.getTasks(projectId, parentId);
+  async getTaskHierarchy(parentId?: string): Promise<TaskHierarchy[]> {
+    const tasks = await this.getTasks(parentId);
     const hierarchies: TaskHierarchy[] = [];
 
     for (const task of tasks) {
-      const children = await this.getTaskHierarchy(projectId, task.id);
+      const children = await this.getTaskHierarchy(task.id);
       hierarchies.push({
         task,
         children,

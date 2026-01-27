@@ -12,23 +12,12 @@ export function createUpdateProjectTool(storage: Storage) {
     name: 'update_project',
     description: 'Update the name and/or description of an existing project',
     inputSchema: {
-      id: z.string(),
       name: z.string().optional(),
       description: z.string().optional()
     },
-    handler: async ({ id, name, description }: { id: string; name?: string; description?: string }) => {
+    handler: async ({ name, description }: { name?: string; description?: string }) => {
       try {
         // Validate inputs
-        if (!id || id.trim().length === 0) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Project ID is required.'
-            }],
-            isError: true
-          };
-        }
-
         if (name !== undefined && (!name || name.trim().length === 0)) {
           return {
             content: [{
@@ -79,37 +68,19 @@ export function createUpdateProjectTool(storage: Storage) {
           };
         }
 
-        const existingProject = await storage.getProject(id.trim());
+        const existingProject = await storage.getProject();
 
         if (!existingProject) {
           return {
             content: [{
               type: 'text' as const,
-              text: `Error: Project with ID "${id}" not found. Use list_projects to see all available projects.`
+              text: 'Error: No project initialized to update. Use create_project first.'
             }],
             isError: true
           };
         }
 
-        // Check for name uniqueness if name is being updated
-        if (name && name.toLowerCase() !== existingProject.name.toLowerCase()) {
-          const existingProjects = await storage.getProjects();
-          const nameExists = existingProjects.some(p => p.id !== id && p.name.toLowerCase() === name.toLowerCase());
-
-          if (nameExists) {
-            return {
-              content: [{
-                type: 'text' as const,
-                text: `Error: A project with the name "${name}" already exists. Please choose a different name.`
-              }],
-              isError: true
-            };
-          }
-        }
-
-        const updates: any = {
-          updatedAt: new Date().toISOString()
-        };
+        const updates: any = {};
 
         if (name !== undefined) {
           updates.name = name.trim();
@@ -119,13 +90,13 @@ export function createUpdateProjectTool(storage: Storage) {
           updates.description = description.trim();
         }
 
-        const updatedProject = await storage.updateProject(id, updates);
+        const updatedProject = await storage.updateProject(updates);
 
         if (!updatedProject) {
           return {
             content: [{
               type: 'text' as const,
-              text: `Error: Failed to update project with ID "${id}".`
+              text: 'Error: Failed to update project.'
             }],
             isError: true
           };
@@ -142,7 +113,6 @@ export function createUpdateProjectTool(storage: Storage) {
 
 **${updatedProject.name}** (ID: ${updatedProject.id})
 Description: ${updatedProject.description}
-Last Updated: ${new Date(updatedProject.updatedAt).toLocaleString()}
 
 Updated fields: ${changedFields.join(', ')}`
           }]

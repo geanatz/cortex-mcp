@@ -27,8 +27,14 @@ export interface CortexConfig {
   /** Schema version */
   version: string;
   
-  /** Array of project definitions (configuration/namespace data) */
-  projects: Project[];
+  /** Project ID (previously inside project object) */
+  id?: string;
+  
+  /** Project Name */
+  name?: string;
+  
+  /** Project Description */
+  description?: string;
   
   /** Timestamp when config was last modified */
   lastModified?: string;
@@ -38,7 +44,7 @@ export interface CortexConfig {
  * Tasks-only data structure stored in .cortex/tasks/tasks.json
  * 
  * This contains only operational task data, separate from project configuration.
- * Tasks reference projects via projectId foreign key.
+ * Tasks operate within the scope of the single defined project.
  */
 export interface TasksData {
   /** Array of tasks (operational data) */
@@ -51,7 +57,6 @@ export interface TasksData {
 export function createEmptyConfig(): CortexConfig {
   return {
     version: CURRENT_CONFIG_VERSION,
-    projects: [],
     lastModified: new Date().toISOString()
   };
 }

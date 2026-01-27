@@ -142,16 +142,10 @@ export function createUpdateTaskTool(storage: Storage) {
               };
             }
 
-            // Ensure parent is in the same project
-            if (newParentTask.projectId !== existingTask.projectId) {
-              return {
-                content: [{
-                  type: 'text' as const,
-                  text: `Error: Parent task must be in the same project.`
-                }],
-                isError: true
-              };
-            }
+            // Ensure parent is not a child of the current task (circular reference check)
+            // This is handled by moveTask in storage, but good to check here or rely on storage logic?
+            // Storage logic is handled in storage.ts, here we just need to pass it.
+            // But we already fetched newParentTask to validate existence.
 
             // Check for circular dependencies (would the new parent be a descendant?)
             const children = await storage.getTaskChildren(id);
@@ -171,7 +165,7 @@ export function createUpdateTaskTool(storage: Storage) {
         // Check for name uniqueness within the same parent scope if name is being updated
         if (name && name.toLowerCase() !== existingTask.name.toLowerCase()) {
           const effectiveParentId = parentId !== undefined ? parentId : existingTask.parentId;
-          const siblingTasks = await storage.getTasks(existingTask.projectId, effectiveParentId);
+          const siblingTasks = await storage.getTasks(effectiveParentId);
           const nameExists = siblingTasks.some(t => t.id !== id && t.name.toLowerCase() === name.toLowerCase());
 
           if (nameExists) {
@@ -276,7 +270,7 @@ export function createUpdateTaskTool(storage: Storage) {
         }
 
         // Get project and hierarchy information for display
-        const project = await storage.getProject(updatedTask.projectId);
+        const project = await storage.getProject();
         const projectName = project ? project.name : 'Unknown Project';
         const currentParent = updatedTask.parentId ? await storage.getTask(updatedTask.parentId) : null;
         const taskLevel = updatedTask.level || 0;
