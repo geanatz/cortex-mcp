@@ -67,16 +67,14 @@ function createMoveTaskTool(storage: Storage) {
 
         // Build path information
         const ancestors = await storage.getTaskAncestors(movedTask.id);
-        const project = await storage.getProject();
-        const projectName = project?.name || 'Unknown Project';
 
         const oldPath = oldParent
-          ? `${projectName} → ${oldParent.name} → ${task.name}`
-          : `${projectName} → ${task.name}`;
+          ? `${oldParent.name} → ${task.name}`
+          : task.name;
 
         const newPath = newParent
-          ? `${projectName} → ${ancestors.map(a => a.name).join(' → ')} → ${movedTask.name}`
-          : `${projectName} → ${movedTask.name}`;
+          ? `${ancestors.map(a => a.name).join(' → ')} → ${movedTask.name}`
+          : movedTask.name;
 
         const levelIndicator = '  '.repeat(movedTask.level || 0) + '→';
 

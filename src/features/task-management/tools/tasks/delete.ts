@@ -50,10 +50,6 @@ export function createDeleteTaskTool(storage: Storage) {
           };
         }
 
-        // Get project information for display
-        const project = await storage.getProject();
-        const projectName = project ? project.name : 'Unknown Project';
-
         // Get count of child tasks for confirmation message
         const childTasks = await storage.getTaskChildren(task.id);
 
@@ -75,7 +71,6 @@ export function createDeleteTaskTool(storage: Storage) {
             text: `✅ Task deleted successfully!
 
 **Deleted:** "${task.name}" (ID: ${task.id})
-**Project:** ${projectName}
 **Also deleted:** ${childTasks.length} child task(s)
 
 This action cannot be undone. All data associated with this task has been permanently removed.`

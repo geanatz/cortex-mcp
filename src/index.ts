@@ -35,15 +35,16 @@ async function main() {
     console.error('');
 
     console.error('📋 Task Management features available:');
-    console.error('   • Project Management (list, create, get, update, delete)');
-    console.error('   • Task Management (list, create, get, update, delete)');
+    console.error('   • Task Management (list, create, get, update, delete, move)');
+    console.error('   • Unlimited task hierarchy with parentId nesting');
+    console.error('   • Task folders with sequential numbering (001-task-name/)');
     console.error('');
     console.error('🧠 Agent Memories features available:');
     console.error('   • Memory Management (create, search, get, list, update, delete)');
     console.error('   • Intelligent multi-field text search with relevance scoring');
-    console.error('   • JSON file storage with title/content architecture');
+    console.error('   • Markdown files with YAML frontmatter');
     console.error('');
-    console.error('💡 Use list_projects to get started with tasks, or create_memory for memories!');
+    console.error('💡 Use list_tasks to get started with tasks, or create_memory for memories!');
   } catch (error) {
     console.error('❌ Failed to start MCP server:', error);
     process.exit(1);

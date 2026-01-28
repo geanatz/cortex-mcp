@@ -24,18 +24,6 @@ export function createListTasksTool(storage: Storage) {
       includeCompleted?: boolean;
     }) => {
       try {
-        // Validate project exists
-        const project = await storage.getProject();
-        if (!project) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: No project initialized. Use create_project to start.'
-            }],
-            isError: true
-          };
-        }
-
         // If parentId is provided, validate parent task exists
         let parentTask = null;
         if (parentId) {
@@ -58,7 +46,7 @@ export function createListTasksTool(storage: Storage) {
           if (hierarchy.length === 0) {
             const scopeDescription = parentTask
               ? `under parent task "${parentTask.name}"`
-              : `at the top level of project "${project.name}"`;
+              : `at the top level`;
 
             return {
               content: [{
@@ -114,8 +102,8 @@ export function createListTasksTool(storage: Storage) {
           const completedTasks = countCompletedTasksInHierarchy(hierarchy);
 
           const scopeInfo = parentTask
-            ? `Showing hierarchy under "${parentTask.name}" in project "${project.name}"`
-            : `Showing full task hierarchy for project "${project.name}"`;
+            ? `Showing hierarchy under "${parentTask.name}"`
+            : `Showing full task hierarchy`;
 
           return {
             content: [{
@@ -140,7 +128,7 @@ ${hierarchyText}
           if (tasks.length === 0) {
             const scopeDescription = parentTask
               ? `under parent task "${parentTask.name}"`
-              : `at the top level of project "${project.name}"`;
+              : `at the top level`;
 
             return {
               content: [{
@@ -170,7 +158,7 @@ ${hierarchyText}
           const completedCount = filteredTasks.filter(t => t.completed).length;
           const scopeDescription = parentTask
             ? `under "${parentTask.name}"`
-            : `at top level of "${project.name}"`;
+            : `at top level`;
 
           return {
             content: [{

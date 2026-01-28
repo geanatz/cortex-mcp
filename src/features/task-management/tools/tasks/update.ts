@@ -269,9 +269,7 @@ export function createUpdateTaskTool(storage: Storage) {
           };
         }
 
-        // Get project and hierarchy information for display
-        const project = await storage.getProject();
-        const projectName = project ? project.name : 'Unknown Project';
+        // Get hierarchy information for display
         const currentParent = updatedTask.parentId ? await storage.getTask(updatedTask.parentId) : null;
         const taskLevel = updatedTask.level || 0;
 
@@ -292,12 +290,12 @@ export function createUpdateTaskTool(storage: Storage) {
         const levelIndicator = '  '.repeat(taskLevel) + '→';
 
         // Build hierarchy path
-        let hierarchyPath = projectName;
+        let hierarchyPath = '';
         if (currentParent) {
           const ancestors = await storage.getTaskAncestors(updatedTask.id);
-          hierarchyPath = `${projectName} → ${ancestors.map(a => a.name).join(' → ')} → ${updatedTask.name}`;
+          hierarchyPath = `${ancestors.map(a => a.name).join(' → ')} → ${updatedTask.name}`;
         } else {
-          hierarchyPath = `${projectName} → ${updatedTask.name}`;
+          hierarchyPath = updatedTask.name;
         }
 
         return {
@@ -307,7 +305,6 @@ export function createUpdateTaskTool(storage: Storage) {
 
 **${levelIndicator} ${updatedTask.name}** (ID: ${updatedTask.id})
 ${currentParent ? `Parent: ${currentParent.name} (${currentParent.id})` : 'Top-level task'}
-Project: ${projectName}
 Level: ${taskLevel} ${taskLevel === 0 ? '(Top-level)' : `(${taskLevel} level${taskLevel > 1 ? 's' : ''} deep)`}
 Path: ${hierarchyPath}
 
@@ -327,8 +324,7 @@ Path: ${hierarchyPath}
 
 🎯 **Next Steps:**
 ${parentId !== undefined ? '• Use `list_tasks` to see the updated hierarchy structure' : ''}
-• Use \`get_next_task_recommendation\` to see what to work on next
-• Run \`analyze_task_complexity\` if complexity has changed
+• Update progress using \`update_task\` as you work
 ${taskLevel > 0 ? '• Consider breaking down further with create_task using this task as parentId' : ''}`
           }]
         };

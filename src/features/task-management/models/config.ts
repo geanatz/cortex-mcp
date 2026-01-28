@@ -1,71 +1,61 @@
 /**
  * Configuration data model for the task management system
  * 
- * This file defines the structure of the cortex configuration stored in .cortex/config.json
- * Projects are treated as configuration (namespace definitions) rather than operational data,
- * following MCP best practices for separation of concerns.
- * 
- * @version 3.0.0
+ * Version 4.0.0 - Simplified architecture without projects
+ * - Removed project concept entirely
+ * - Tasks stored in individual folders with sequential numbering
+ * - Index file for quick lookups
  */
-
-import { Project } from './project.js';
 
 /**
- * Current schema version for the configuration file
+ * Current schema version for the storage format
  */
-export const CURRENT_CONFIG_VERSION = '3.0.0';
+export const CURRENT_STORAGE_VERSION = '4.0.0';
 
 /**
- * Main configuration structure stored in .cortex/config.json
- * 
- * This is the single source of truth for:
- * - Schema version
- * - Project definitions (workspace namespaces)
- * - Future: User preferences, settings, feature flags
+ * Task index entry for quick lookups
  */
-export interface CortexConfig {
+export interface TaskIndexEntry {
+  /** Task ID (UUID) */
+  id: string;
+  /** Task folder name (e.g., "001-implement-auth") */
+  folderName: string;
+  /** Task name for display */
+  name: string;
+  /** Parent task ID for hierarchy */
+  parentId?: string;
+  /** Task status */
+  status: 'pending' | 'in-progress' | 'blocked' | 'done';
+  /** Whether task is completed */
+  completed: boolean;
+  /** Creation timestamp */
+  createdAt: string;
+  /** Last update timestamp */
+  updatedAt: string;
+}
+
+/**
+ * Task index structure stored in .cortex/tasks/index.json
+ */
+export interface TaskIndex {
   /** Schema version */
   version: string;
-  
-  /** Project ID (previously inside project object) */
-  id?: string;
-  
-  /** Project Name */
-  name?: string;
-  
-  /** Project Description */
-  description?: string;
-  
-  /** Timestamp when config was last modified */
-  lastModified?: string;
+  /** Next sequential number for task folders */
+  nextNumber: number;
+  /** Array of task index entries */
+  tasks: TaskIndexEntry[];
+  /** Last modified timestamp */
+  lastModified: string;
 }
 
 /**
- * Tasks-only data structure stored in .cortex/tasks/tasks.json
- * 
- * This contains only operational task data, separate from project configuration.
- * Tasks operate within the scope of the single defined project.
+ * Create an empty task index
  */
-export interface TasksData {
-  /** Array of tasks (operational data) */
-  tasks: import('./task.js').Task[];
-}
-
-/**
- * Create a new empty configuration with current version
- */
-export function createEmptyConfig(): CortexConfig {
+export function createEmptyTaskIndex(): TaskIndex {
   return {
-    version: CURRENT_CONFIG_VERSION,
+    version: CURRENT_STORAGE_VERSION,
+    nextNumber: 1,
+    tasks: [],
     lastModified: new Date().toISOString()
-  };
-}
-
-/**
- * Create empty tasks data structure
- */
-export function createEmptyTasksData(): TasksData {
-  return {
-    tasks: []
   };
 }

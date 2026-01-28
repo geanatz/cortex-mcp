@@ -1,12 +1,30 @@
 import { promises as fs } from 'fs';
-import { join, dirname } from 'path';
-import { randomUUID } from 'crypto';
+import { join, basename } from 'path';
 import { MemoryStorage } from './storage.js';
 import { Memory, SearchMemoryInput, MemorySearchResult } from '../models/memory.js';
 
 /**
  * File-based storage implementation for agent memories
- * Stores each memory as an individual JSON file organized by category
+ * Stores each memory as a markdown file with YAML frontmatter
+ * 
+ * Storage format:
+ * .cortex/memories/
+ *   user-prefers-concise-responses.md
+ *   project-uses-typescript.md
+ *   api-key-location.md
+ * 
+ * File format:
+ * ---
+ * id: uuid
+ * title: User prefers concise responses
+ * category: user_preferences
+ * createdAt: 2024-01-01T00:00:00.000Z
+ * updatedAt: 2024-01-01T00:00:00.000Z
+ * metadata:
+ *   key: value
+ * ---
+ * 
+ * Content goes here...
  */
 export class FileStorage implements MemoryStorage {
   private workingDirectory: string;
@@ -42,19 +60,22 @@ export class FileStorage implements MemoryStorage {
   }
 
   /**
-   * Sanitize a string for safe filesystem usage
+   * Sanitize a string for safe filesystem usage (kebab-case)
    */
   private sanitizeFileName(input: string): string {
-    // Remove or replace unsafe characters
+    // Convert to lowercase, replace spaces and unsafe characters with hyphens
     let sanitized = input
-      .replace(/[/\\:*?"<>|]/g, '_') // Replace unsafe chars with underscore
-      .replace(/\s+/g, '_') // Replace spaces with underscore
-      .replace(/_{2,}/g, '_') // Replace multiple underscores with single
-      .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+      .toLowerCase()
+      .trim()
+      .replace(/[/\\:*?"<>|]/g, '-') // Replace unsafe chars with hyphen
+      .replace(/\s+/g, '-') // Replace spaces with hyphen
+      .replace(/[^a-z0-9-]/g, '-') // Replace any remaining non-alphanumeric with hyphen
+      .replace(/-{2,}/g, '-') // Replace multiple hyphens with single
+      .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
 
     // Limit length to 100 characters
     if (sanitized.length > 100) {
-      sanitized = sanitized.substring(0, 100);
+      sanitized = sanitized.substring(0, 100).replace(/-+$/, ''); // Clean trailing hyphen after truncation
     }
 
     // Ensure it's not empty
@@ -75,42 +96,161 @@ export class FileStorage implements MemoryStorage {
   }
 
   /**
-   * Get file path for a memory
+   * Get file path for a memory based on title
    */
-  private getMemoryFilePath(memory: Memory): string {
-    const category = memory.category || 'general';
-    const categoryDir = join(this.memoriesDir, this.sanitizeFileName(category));
-    this.validateTitle(memory.title);
-    const fileName = this.sanitizeFileName(memory.title) + '.json';
-    return join(categoryDir, fileName);
+  private getMemoryFilePath(title: string): string {
+    this.validateTitle(title);
+    const fileName = this.sanitizeFileName(title) + '.md';
+    return join(this.memoriesDir, fileName);
   }
 
   /**
-   * Get file path by ID (scan all categories)
+   * Parse YAML frontmatter from markdown content
    */
-  private async findMemoryFileById(id: string): Promise<string | null> {
+  private parseMarkdownFile(content: string): { frontmatter: Record<string, any>; body: string } | null {
+    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    if (!frontmatterMatch) {
+      return null;
+    }
+
     try {
-      const categories = await fs.readdir(this.memoriesDir, { withFileTypes: true });
+      const frontmatterStr = frontmatterMatch[1];
+      const body = frontmatterMatch[2].trim();
 
-      for (const category of categories) {
-        if (category.isDirectory()) {
-          const categoryPath = join(this.memoriesDir, category.name);
-          const files = await fs.readdir(categoryPath);
+      // Simple YAML parsing (for our limited use case)
+      const frontmatter: Record<string, any> = {};
+      let currentKey: string | null = null;
+      let inMetadata = false;
+      const metadata: Record<string, any> = {};
 
-          for (const file of files) {
-            if (file.endsWith('.json')) {
-              const filePath = join(categoryPath, file);
-              try {
-                const content = await fs.readFile(filePath, 'utf-8');
-                const memory = JSON.parse(content);
-                if (memory.id === id) {
-                  return filePath;
-                }
-              } catch (error) {
-                // Skip invalid JSON files
-                continue;
-              }
+      for (const line of frontmatterStr.split('\n')) {
+        if (line.startsWith('metadata:')) {
+          inMetadata = true;
+          currentKey = 'metadata';
+          continue;
+        }
+
+        if (inMetadata) {
+          if (line.startsWith('  ')) {
+            // Metadata key-value pair
+            const match = line.match(/^\s{2}(\w+):\s*(.*)$/);
+            if (match) {
+              const [, key, value] = match;
+              metadata[key] = this.parseYamlValue(value);
             }
+          } else if (line.trim() && !line.startsWith(' ')) {
+            // End of metadata block
+            inMetadata = false;
+            frontmatter['metadata'] = metadata;
+          }
+        }
+
+        if (!inMetadata && line.trim()) {
+          const colonIndex = line.indexOf(':');
+          if (colonIndex > 0) {
+            const key = line.substring(0, colonIndex).trim();
+            const value = line.substring(colonIndex + 1).trim();
+            frontmatter[key] = this.parseYamlValue(value);
+          }
+        }
+      }
+
+      if (inMetadata) {
+        frontmatter['metadata'] = metadata;
+      }
+
+      return { frontmatter, body };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Parse a YAML value to its proper type
+   */
+  private parseYamlValue(value: string): any {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    if (value === 'null' || value === '~') return null;
+    if (/^-?\d+$/.test(value)) return parseInt(value, 10);
+    if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value);
+    // Remove surrounding quotes if present
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      return value.slice(1, -1);
+    }
+    return value;
+  }
+
+  /**
+   * Serialize memory to markdown with YAML frontmatter
+   */
+  private serializeToMarkdown(memory: Memory): string {
+    const lines: string[] = ['---'];
+
+    lines.push(`id: ${memory.id}`);
+    lines.push(`title: "${memory.title.replace(/"/g, '\\"')}"`);
+    if (memory.category) {
+      lines.push(`category: ${memory.category}`);
+    }
+    lines.push(`createdAt: ${memory.createdAt}`);
+    lines.push(`updatedAt: ${memory.updatedAt}`);
+
+    // Add metadata if present
+    if (memory.metadata && Object.keys(memory.metadata).length > 0) {
+      lines.push('metadata:');
+      for (const [key, value] of Object.entries(memory.metadata)) {
+        if (typeof value === 'string') {
+          lines.push(`  ${key}: "${value.replace(/"/g, '\\"')}"`);
+        } else {
+          lines.push(`  ${key}: ${JSON.stringify(value)}`);
+        }
+      }
+    }
+
+    lines.push('---');
+    lines.push('');
+    lines.push(memory.content);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Convert parsed file to Memory object
+   */
+  private fileToMemory(frontmatter: Record<string, any>, body: string): Memory {
+    return {
+      id: frontmatter.id || '',
+      title: frontmatter.title || '',
+      content: body,
+      metadata: frontmatter.metadata || {},
+      createdAt: frontmatter.createdAt || new Date().toISOString(),
+      updatedAt: frontmatter.updatedAt || new Date().toISOString(),
+      category: frontmatter.category || undefined
+    };
+  }
+
+  /**
+   * Find memory file by ID (scan all files)
+   */
+  private async findMemoryFileById(id: string): Promise<{ path: string; memory: Memory } | null> {
+    try {
+      const files = await fs.readdir(this.memoriesDir);
+
+      for (const file of files) {
+        if (file.endsWith('.md')) {
+          const filePath = join(this.memoriesDir, file);
+          try {
+            const content = await fs.readFile(filePath, 'utf-8');
+            const parsed = this.parseMarkdownFile(content);
+            if (parsed && parsed.frontmatter.id === id) {
+              return {
+                path: filePath,
+                memory: this.fileToMemory(parsed.frontmatter, parsed.body)
+              };
+            }
+          } catch (error) {
+            // Skip invalid files
+            continue;
           }
         }
       }
@@ -119,14 +259,6 @@ export class FileStorage implements MemoryStorage {
     } catch (error) {
       return null;
     }
-  }
-
-  /**
-   * Ensure category directory exists
-   */
-  private async ensureCategoryDirectory(category: string): Promise<void> {
-    const categoryDir = join(this.memoriesDir, this.sanitizeFileName(category || 'general'));
-    await fs.mkdir(categoryDir, { recursive: true });
   }
 
   /**
@@ -140,11 +272,10 @@ export class FileStorage implements MemoryStorage {
       try {
         await fs.access(filePath);
         // File exists, try next number
-        const dir = dirname(basePath);
-        const ext = '.json';
-        const baseNameWithExt = basePath.substring(dir.length + 1); // Get filename from path
-        const baseName = baseNameWithExt.replace(ext, ''); // Remove extension
-        filePath = join(dir, `${baseName}_${counter}${ext}`);
+        const ext = '.md';
+        const baseNameWithExt = basename(basePath);
+        const baseName = baseNameWithExt.replace(ext, '');
+        filePath = join(this.memoriesDir, `${baseName}-${counter}${ext}`);
         counter++;
       } catch (error) {
         // File doesn't exist, we can use this path
@@ -159,25 +290,13 @@ export class FileStorage implements MemoryStorage {
    * Create a new memory
    */
   async createMemory(memory: Memory): Promise<Memory> {
-    // Ensure category directory exists
-    await this.ensureCategoryDirectory(memory.category || 'general');
-
-    // Create simplified memory object for JSON storage
-    const jsonMemory = {
-      id: memory.id,
-      title: memory.title,
-      details: memory.content,
-      category: memory.category || 'general',
-      dateCreated: memory.createdAt,
-      dateUpdated: memory.updatedAt
-    };
-
     // Get file path and handle conflicts
-    let filePath = this.getMemoryFilePath(memory);
+    let filePath = this.getMemoryFilePath(memory.title);
     filePath = await this.resolveFileNameConflict(filePath);
 
-    // Write to file
-    await fs.writeFile(filePath, JSON.stringify(jsonMemory, null, 2), 'utf-8');
+    // Serialize and write to file
+    const markdownContent = this.serializeToMarkdown(memory);
+    await fs.writeFile(filePath, markdownContent, 'utf-8');
 
     return memory;
   }
@@ -186,28 +305,8 @@ export class FileStorage implements MemoryStorage {
    * Get a specific memory by ID
    */
   async getMemory(id: string): Promise<Memory | null> {
-    const filePath = await this.findMemoryFileById(id);
-    if (!filePath) {
-      return null;
-    }
-
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const jsonMemory = JSON.parse(content);
-
-      // Convert back to Memory interface
-      return {
-        id: jsonMemory.id,
-        title: jsonMemory.title,
-        content: jsonMemory.details,
-        metadata: {},
-        createdAt: jsonMemory.dateCreated,
-        updatedAt: jsonMemory.dateUpdated,
-        category: jsonMemory.category === 'general' ? undefined : jsonMemory.category
-      };
-    } catch (error) {
-      return null;
-    }
+    const result = await this.findMemoryFileById(id);
+    return result ? result.memory : null;
   }
 
   /**
@@ -217,50 +316,39 @@ export class FileStorage implements MemoryStorage {
     const memories: Memory[] = [];
 
     try {
-      const categories = await fs.readdir(this.memoriesDir, { withFileTypes: true });
+      const files = await fs.readdir(this.memoriesDir);
 
-      for (const categoryEntry of categories) {
-        if (categoryEntry.isDirectory()) {
-          // Skip if category filter doesn't match
-          if (category && categoryEntry.name !== this.sanitizeFileName(category)) {
-            continue;
-          }
+      for (const file of files) {
+        if (file.endsWith('.md')) {
+          const filePath = join(this.memoriesDir, file);
+          try {
+            const content = await fs.readFile(filePath, 'utf-8');
+            const parsed = this.parseMarkdownFile(content);
 
-          const categoryPath = join(this.memoriesDir, categoryEntry.name);
-          const files = await fs.readdir(categoryPath);
+            if (parsed) {
+              const memory = this.fileToMemory(parsed.frontmatter, parsed.body);
 
-          for (const file of files) {
-            if (file.endsWith('.json')) {
-              const filePath = join(categoryPath, file);
-              try {
-                const content = await fs.readFile(filePath, 'utf-8');
-                const jsonMemory = JSON.parse(content);
-
-                // Convert to Memory interface
-                const memory: Memory = {
-                  id: jsonMemory.id,
-                  title: jsonMemory.title,
-                  content: jsonMemory.details,
-                  metadata: {},
-                  createdAt: jsonMemory.dateCreated,
-                  updatedAt: jsonMemory.dateUpdated,
-                  category: jsonMemory.category === 'general' ? undefined : jsonMemory.category
-                };
-
-                memories.push(memory);
-
-                // Apply limit if specified
-                if (limit && memories.length >= limit) {
-                  return memories;
-                }
-              } catch (error) {
-                // Skip invalid JSON files
+              // Apply category filter if specified
+              if (category && memory.category !== category) {
                 continue;
               }
+
+              memories.push(memory);
+
+              // Apply limit if specified
+              if (limit && memories.length >= limit) {
+                return memories;
+              }
             }
+          } catch (error) {
+            // Skip invalid files
+            continue;
           }
         }
       }
+
+      // Sort by updatedAt descending (most recent first)
+      memories.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
       return memories;
     } catch (error) {
@@ -272,72 +360,52 @@ export class FileStorage implements MemoryStorage {
    * Update an existing memory
    */
   async updateMemory(id: string, updates: Partial<Memory>): Promise<Memory | null> {
-    const filePath = await this.findMemoryFileById(id);
-    if (!filePath) {
+    const result = await this.findMemoryFileById(id);
+    if (!result) {
       return null;
     }
 
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const jsonMemory = JSON.parse(content);
+    const { path: oldFilePath, memory: existingMemory } = result;
 
-      // Convert to Memory interface for merging
-      const existingMemory: Memory = {
-        id: jsonMemory.id,
-        title: jsonMemory.title,
-        content: jsonMemory.details,
-        metadata: {},
-        createdAt: jsonMemory.dateCreated,
-        updatedAt: jsonMemory.dateUpdated,
-        category: jsonMemory.category === 'general' ? undefined : jsonMemory.category
-      };
+    // Merge updates
+    const updatedMemory: Memory = {
+      ...existingMemory,
+      ...updates,
+      id: existingMemory.id, // Ensure ID doesn't change
+      updatedAt: new Date().toISOString(),
+    };
 
-      // Merge updates
-      const updatedMemory: Memory = {
-        ...existingMemory,
-        ...updates,
-        id: existingMemory.id, // Ensure ID doesn't change
-        updatedAt: new Date().toISOString(),
-      };
+    // If title changed, we need to move the file
+    if (updates.title !== undefined && updates.title !== existingMemory.title) {
+      // Delete old file
+      await fs.unlink(oldFilePath);
 
-      // If category changed, we need to move the file
-      if (updates.category !== undefined && updates.category !== existingMemory.category) {
-        // Delete old file
-        await fs.unlink(filePath);
+      // Create new file with new name
+      let newFilePath = this.getMemoryFilePath(updatedMemory.title);
+      newFilePath = await this.resolveFileNameConflict(newFilePath);
 
-        // Create new file in new category
-        await this.createMemory(updatedMemory);
-      } else {
-        // Update existing file
-        const updatedJsonMemory = {
-          id: updatedMemory.id,
-          title: updatedMemory.title,
-          details: updatedMemory.content,
-          category: updatedMemory.category || 'general',
-          dateCreated: updatedMemory.createdAt,
-          dateUpdated: updatedMemory.updatedAt
-        };
-
-        await fs.writeFile(filePath, JSON.stringify(updatedJsonMemory, null, 2), 'utf-8');
-      }
-
-      return updatedMemory;
-    } catch (error) {
-      return null;
+      const markdownContent = this.serializeToMarkdown(updatedMemory);
+      await fs.writeFile(newFilePath, markdownContent, 'utf-8');
+    } else {
+      // Update existing file
+      const markdownContent = this.serializeToMarkdown(updatedMemory);
+      await fs.writeFile(oldFilePath, markdownContent, 'utf-8');
     }
+
+    return updatedMemory;
   }
 
   /**
    * Delete a memory
    */
   async deleteMemory(id: string): Promise<boolean> {
-    const filePath = await this.findMemoryFileById(id);
-    if (!filePath) {
+    const result = await this.findMemoryFileById(id);
+    if (!result) {
       return false;
     }
 
     try {
-      await fs.unlink(filePath);
+      await fs.unlink(result.path);
       return true;
     } catch (error) {
       return false;
@@ -350,6 +418,7 @@ export class FileStorage implements MemoryStorage {
   async searchMemories(input: SearchMemoryInput): Promise<MemorySearchResult[]> {
     const query = typeof input.query === 'string' ? input.query.toLowerCase() : '';
     const limit = input.limit || 10;
+    const threshold = input.threshold || 0.3;
     const results: MemorySearchResult[] = [];
 
     // Get all memories first
@@ -368,7 +437,7 @@ export class FileStorage implements MemoryStorage {
         if (titleMatch) {
           const titleLower = memory.title.toLowerCase();
           const firstIndex = titleLower.indexOf(query);
-          const occurrences = (titleLower.match(new RegExp(query, 'g')) || []).length;
+          const occurrences = (titleLower.match(new RegExp(this.escapeRegex(query), 'g')) || []).length;
           // Higher score for title matches (more important)
           score += (1 - firstIndex / titleLower.length) * 0.6 + (occurrences / 5) * 0.4;
         }
@@ -376,7 +445,7 @@ export class FileStorage implements MemoryStorage {
         if (contentMatch) {
           const contentLower = memory.content.toLowerCase();
           const firstIndex = contentLower.indexOf(query);
-          const occurrences = (contentLower.match(new RegExp(query, 'g')) || []).length;
+          const occurrences = (contentLower.match(new RegExp(this.escapeRegex(query), 'g')) || []).length;
           // Lower score for content matches
           score += (1 - firstIndex / contentLower.length) * 0.3 + (occurrences / 10) * 0.3;
         }
@@ -385,17 +454,29 @@ export class FileStorage implements MemoryStorage {
           score += 0.2; // Bonus for category match
         }
 
-        results.push({
-          memory,
-          score: Math.min(score, 1), // Cap at 1.0
-          distance: 1 - score // Convert score to distance
-        });
+        const normalizedScore = Math.min(score, 1); // Cap at 1.0
+
+        // Only include results above threshold
+        if (normalizedScore >= threshold) {
+          results.push({
+            memory,
+            score: normalizedScore,
+            distance: 1 - normalizedScore // Convert score to distance
+          });
+        }
       }
     }
 
     // Sort by score (highest first) and apply limit
     results.sort((a, b) => b.score - a.score);
     return results.slice(0, limit);
+  }
+
+  /**
+   * Escape special regex characters
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
@@ -423,7 +504,7 @@ export class FileStorage implements MemoryStorage {
 
     for (const memory of memories) {
       // Count by category
-      const category = memory.category || 'general';
+      const category = memory.category || 'uncategorized';
       memoriesByCategory[category] = (memoriesByCategory[category] || 0) + 1;
 
       // Track oldest and newest

@@ -2,15 +2,15 @@ import { z } from 'zod';
 import { Storage } from '../../storage/storage.js';
 
 /**
- * Delete a project and all associated tasks and subtasks
+ * Delete all tasks and subtasks
  *
  * @param storage - Storage instance
- * @returns MCP tool handler for deleting projects
+ * @returns MCP tool handler for deleting all tasks
  */
 export function createDeleteProjectTool(storage: Storage) {
   return {
     name: 'delete_project',
-    description: 'Delete a project and all its associated tasks and subtasks. This action cannot be undone.',
+    description: 'Delete all tasks and subtasks. This action cannot be undone.',
     inputSchema: {
       confirm: z.boolean()
     },
@@ -20,19 +20,7 @@ export function createDeleteProjectTool(storage: Storage) {
           return {
             content: [{
               type: 'text' as const,
-              text: 'Error: You must set confirm to true to delete a project.'
-            }],
-            isError: true
-          };
-        }
-
-        const project = await storage.getProject();
-
-        if (!project) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: No project initialized to delete.'
+              text: 'Error: You must set confirm to true to delete all tasks.'
             }],
             isError: true
           };
@@ -41,34 +29,38 @@ export function createDeleteProjectTool(storage: Storage) {
         // Get counts for confirmation message
         const tasks = await storage.getTasks();
 
-        const deleted = await storage.deleteProject();
-
-        if (!deleted) {
+        if (tasks.length === 0) {
           return {
             content: [{
               type: 'text' as const,
-              text: 'Error: Failed to delete project.'
-            }],
-            isError: true
+              text: 'No tasks to delete.'
+            }]
           };
+        }
+
+        // Delete all tasks
+        let deletedCount = 0;
+        for (const task of tasks) {
+          if (await storage.deleteTask(task.id)) {
+            deletedCount++;
+          }
         }
 
         return {
           content: [{
             type: 'text' as const,
-            text: `✅ Project deleted successfully!
+            text: `✅ All tasks deleted successfully!
 
-**Deleted:** "${project.name}" (ID: ${project.id})
-**Also deleted:** ${tasks.length} task(s)
+**Deleted:** ${deletedCount} task(s)
 
-This action cannot be undone. All data associated with this project has been permanently removed.`
+This action cannot be undone. All task data has been permanently removed.`
           }]
         };
       } catch (error) {
         return {
           content: [{
             type: 'text' as const,
-            text: `Error deleting project: ${error instanceof Error ? error.message : 'Unknown error'}`
+            text: `Error deleting tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
           }],
           isError: true
         };

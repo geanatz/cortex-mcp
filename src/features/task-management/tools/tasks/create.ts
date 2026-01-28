@@ -102,10 +102,9 @@ export function createCreateTaskTool(storage: Storage) {
         const nameExists = siblingTasks.some(t => t.name.toLowerCase() === name.toLowerCase());
 
         if (nameExists) {
-          const project = await storage.getProject();
           const scopeDescription = parentTask
             ? `under parent task "${parentTask.name}"`
-            : `at the top level of project "${project?.name || 'Current Project'}"`;
+            : `at the top level`;
           return {
             content: [{
               type: 'text' as const,
@@ -150,11 +149,10 @@ export function createCreateTaskTool(storage: Storage) {
         };
 
         const createdTask = await storage.createTask(task);
-        const project = await storage.getProject();
 
         const hierarchyPath = parentTask
-          ? `${project?.name || 'Project'} → ${parentTask.name} → ${createdTask.name}`
-          : `${project?.name || 'Project'} → ${createdTask.name}`;
+          ? `${parentTask.name} → ${createdTask.name}`
+          : createdTask.name;
 
         const levelIndicator = '  '.repeat(taskLevel) + '→';
 
@@ -165,7 +163,6 @@ export function createCreateTaskTool(storage: Storage) {
 
 **${levelIndicator} ${createdTask.name}** (ID: ${createdTask.id})
 ${parentTask ? `Parent: ${parentTask.name} (${parentTask.id})` : 'Top-level task'}
-Project: ${project?.name || 'Current Project'}
 Level: ${taskLevel} ${taskLevel === 0 ? '(Top-level)' : `(${taskLevel} level${taskLevel > 1 ? 's' : ''} deep)`}
 Path: ${hierarchyPath}
 
@@ -184,9 +181,8 @@ ${taskLevel === 0
   ? '• Break down into smaller tasks using create_task with parentId for complex work'
   : '• Add even more granular tasks if needed using create_task with this task as parentId'
 }
-• Use \`get_next_task_recommendation\` to see if this task is ready to work on
 • Update progress using \`update_task\` as you work
-• Use \`list_tasks\` with projectId and parentId to see the task hierarchy`
+• Use \`list_tasks\` with parentId to see the task hierarchy`
           }]
         };
       } catch (error) {

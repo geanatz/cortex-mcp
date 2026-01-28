@@ -39,10 +39,6 @@ export function createGetTaskTool(storage: Storage) {
           };
         }
 
-        // Get project information
-        const project = await storage.getProject();
-        const projectName = project ? project.name : 'Unknown Project';
-
         // Get related child tasks for summary
         const childTasks = await storage.getTaskChildren(task.id);
         const completedChildren = childTasks.filter(t => t.completed).length;
@@ -57,7 +53,6 @@ export function createGetTaskTool(storage: Storage) {
             type: 'text' as const,
             text: `**${task.name}** (ID: ${task.id})
 
-**Project:** ${projectName}
 **Status:** ${status}
 **Details:** ${task.details}
 

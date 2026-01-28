@@ -5,12 +5,6 @@ import { getVersion } from './utils/version.js';
 import { StorageConfig, resolveWorkingDirectory, getWorkingDirectoryDescription } from './utils/storage-config.js';
 import { z } from 'zod';
 
-import { createCreateProjectTool } from './features/task-management/tools/projects/create.js';
-
-import { createGetProjectTool } from './features/task-management/tools/projects/get.js';
-import { createUpdateProjectTool } from './features/task-management/tools/projects/update.js';
-import { createDeleteProjectTool } from './features/task-management/tools/projects/delete.js';
-
 // Task tools
 import { createListTasksTool } from './features/task-management/tools/tasks/list.js';
 import { createCreateTaskTool } from './features/task-management/tools/tasks/create.js';
@@ -25,14 +19,6 @@ import { createGetMemoryTool } from './features/agent-memories/tools/memories/ge
 import { createListMemoriesTool } from './features/agent-memories/tools/memories/list.js';
 import { createUpdateMemoryTool } from './features/agent-memories/tools/memories/update.js';
 import { createDeleteMemoryTool } from './features/agent-memories/tools/memories/delete.js';
-
-// Advanced task management tools (TaskMaster-like features)
-import { createParsePRDTool } from './features/task-management/tools/prd/parse-prd.js';
-import { createNextTaskRecommendationTool } from './features/task-management/tools/recommendations/next-task.js';
-import { createComplexityAnalysisTool } from './features/task-management/tools/analysis/complexity-analysis.js';
-import { createProgressInferenceTool } from './features/task-management/tools/analysis/progress-inference.js';
-import { createTaskResearchTool } from './features/task-management/tools/research/task-research.js';
-import { createResearchQueriesGeneratorTool } from './features/task-management/tools/research/research-queries.js';
 
 /**
  * Create storage instance for a specific working directory
@@ -64,110 +50,10 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     version: getVersion()
   });
 
-  // Register project management tools
-
-
-  server.tool(
-    'create_project',
-    'Launch new projects with structured organization and detailed documentation. Establishes a solid foundation for task management with Git-trackable project data, enabling seamless collaboration and progress tracking across your development workflow.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      name: z.string().describe('The name of the new project'),
-      description: z.string().describe('A detailed description of the project')
-    },
-    async ({ workingDirectory, name, description }: { workingDirectory: string; name: string; description: string }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createCreateProjectTool(storage);
-        return await tool.handler({ name, description });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  server.tool(
-    'get_project',
-    'Access comprehensive project details including metadata, creation dates, and current status. Essential for project analysis, reporting, and understanding project context when planning tasks or reviewing progress in your development workflow.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config))
-    },
-    async ({ workingDirectory }: { workingDirectory: string }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createGetProjectTool(storage);
-        return await tool.handler();
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  server.tool(
-    'update_project',
-    'Evolve and refine your project information as requirements change and scope develops. Maintain accurate project documentation with flexible updates to names and descriptions, ensuring your project data stays current and meaningful throughout the development lifecycle.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      name: z.string().optional().describe('New name for the project (optional)'),
-      description: z.string().optional().describe('New description for the project (optional)')
-    },
-    async ({ workingDirectory, name, description }: { workingDirectory: string; name?: string; description?: string }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createUpdateProjectTool(storage);
-        return await tool.handler({ name, description });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  server.tool(
-    'delete_project',
-    'Safely remove completed or obsolete projects from your workspace with built-in confirmation safeguards. Permanently cleans up project data while protecting against accidental deletions, helping maintain an organized and current project portfolio.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
-    },
-    async ({ workingDirectory, confirm }: { workingDirectory: string; confirm: boolean }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createDeleteProjectTool(storage);
-        return await tool.handler({ confirm });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
   // Register task management tools
   server.tool(
     'list_tasks',
-    'Explore and organize your task portfolio with intelligent filtering and comprehensive progress tracking. View all tasks across projects or focus on specific project tasks, perfect for sprint planning, progress reviews, and maintaining productivity momentum.',
+    'Explore and organize your task portfolio with intelligent filtering and comprehensive progress tracking. View all tasks or focus on specific subtrees, perfect for sprint planning, progress reviews, and maintaining productivity momentum.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       parentId: z.string().optional().describe('Filter to tasks under this parent (optional)'),
@@ -198,7 +84,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
 
   server.tool(
     'create_task',
-    'Transform project goals into actionable, trackable tasks with advanced features including dependencies, priorities, complexity estimation, and workflow management. Build structured workflows that break down complex projects into manageable components with unlimited hierarchy depth.',
+    'Transform goals into actionable, trackable tasks with advanced features including dependencies, priorities, complexity estimation, and workflow management. Build structured workflows that break down complex work into manageable components with unlimited hierarchy depth.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       name: z.string().describe('The name/title of the new task'),
@@ -265,7 +151,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
 
   server.tool(
     'update_task',
-    'Adapt and refine tasks with comprehensive updates including dependencies, priorities, complexity, status, tags, and time tracking. Keep your workflow current and accurate with advanced project management capabilities including unlimited hierarchy movement.',
+    'Adapt and refine tasks with comprehensive updates including dependencies, priorities, complexity, status, tags, and time tracking. Keep your workflow current and accurate with advanced task management capabilities including unlimited hierarchy movement.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       id: z.string().describe('The unique identifier of the task to update'),
@@ -397,16 +283,14 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
 
         // Build path information
         const ancestors = await storage.getTaskAncestors(movedTask.id);
-        const project = await storage.getProject();
-        const projectName = project?.name || 'Unknown Project';
 
         const oldPath = oldParent
-          ? `${projectName} → ${oldParent.name} → ${task.name}`
-          : `${projectName} → ${task.name}`;
+          ? `${oldParent.name} → ${task.name}`
+          : task.name;
 
         const newPath = newParent
-          ? `${projectName} → ${ancestors.map(a => a.name).join(' → ')} → ${movedTask.name}`
-          : `${projectName} → ${movedTask.name}`;
+          ? `${ancestors.map(a => a.name).join(' → ')} → ${movedTask.name}`
+          : movedTask.name;
 
         const levelIndicator = '  '.repeat(movedTask.level || 0) + '→';
 
@@ -609,211 +493,6 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const storage = await createMemoryStorage(workingDirectory, config);
         const tool = createDeleteMemoryTool(storage);
         return await tool.handler({ id, confirm });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  // Register advanced task management tools
-  server.tool(
-    'parse_prd',
-    'Parse a Product Requirements Document (PRD) and automatically generate structured tasks with dependencies, priorities, and complexity estimates. Transform high-level requirements into actionable task breakdowns with intelligent analysis.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      prdContent: z.string().describe('Content of the Product Requirements Document to parse'),
-      generateSubtasks: z.boolean().optional().default(true).describe('Whether to generate subtasks for complex tasks'),
-      defaultPriority: z.number().min(1).max(10).optional().default(5).describe('Default priority for generated tasks (1-10)'),
-      estimateComplexity: z.boolean().optional().default(true).describe('Whether to estimate complexity for tasks')
-    },
-    async ({ workingDirectory, prdContent, generateSubtasks, defaultPriority, estimateComplexity }: {
-      workingDirectory: string;
-      prdContent: string;
-      generateSubtasks?: boolean;
-      defaultPriority?: number;
-      estimateComplexity?: boolean;
-    }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createParsePRDTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, prdContent, generateSubtasks, defaultPriority, estimateComplexity });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  server.tool(
-    'get_next_task_recommendation',
-    'Get intelligent recommendations for the next task to work on based on dependencies, priorities, complexity, and current project status. Smart task recommendation engine for optimal workflow management and productivity.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      maxRecommendations: z.number().min(1).max(10).optional().default(3).describe('Maximum number of task recommendations to return'),
-      considerComplexity: z.boolean().optional().default(true).describe('Whether to factor in task complexity for recommendations'),
-      preferredTags: z.array(z.string()).optional().describe('Preferred task tags to prioritize in recommendations'),
-      excludeBlocked: z.boolean().optional().default(true).describe('Whether to exclude blocked tasks from recommendations')
-    },
-    async ({ workingDirectory, maxRecommendations, considerComplexity, preferredTags, excludeBlocked }: {
-      workingDirectory: string;
-      maxRecommendations?: number;
-      considerComplexity?: boolean;
-      preferredTags?: string[];
-      excludeBlocked?: boolean;
-    }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createNextTaskRecommendationTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, maxRecommendations, considerComplexity, preferredTags, excludeBlocked });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  server.tool(
-    'analyze_task_complexity',
-    'Analyze task complexity and suggest breaking down overly complex tasks into smaller, manageable subtasks. Intelligent complexity analysis to identify tasks that should be split for better productivity and progress tracking.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      taskId: z.string().optional().describe('Specific task ID to analyze (if not provided, analyzes all tasks)'),
-      complexityThreshold: z.number().min(1).max(10).optional().default(7).describe('Complexity threshold above which tasks should be broken down'),
-      suggestBreakdown: z.boolean().optional().default(true).describe('Whether to suggest specific task breakdowns'),
-      autoCreateSubtasks: z.boolean().optional().default(false).describe('Whether to automatically create suggested subtasks')
-    },
-    async ({ workingDirectory, taskId, complexityThreshold, suggestBreakdown, autoCreateSubtasks }: {
-      workingDirectory: string;
-      taskId?: string;
-      complexityThreshold?: number;
-      suggestBreakdown?: boolean;
-      autoCreateSubtasks?: boolean;
-    }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createComplexityAnalysisTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, taskId, complexityThreshold, suggestBreakdown, autoCreateSubtasks });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  server.tool(
-    'infer_task_progress',
-    'Analyze the codebase to infer which tasks appear to be completed based on code changes, file creation, and implementation evidence. Intelligent progress inference to automatically track task completion from code analysis.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      projectId: z.string().optional().describe('Filter analysis to a specific project'),
-      scanDepth: z.number().min(1).max(5).optional().default(3).describe('Directory depth to scan for code files'),
-      fileExtensions: z.array(z.string()).optional().default(['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.go', '.rs']).describe('File extensions to analyze'),
-      autoUpdateTasks: z.boolean().optional().default(false).describe('Whether to automatically update task status based on inference'),
-      confidenceThreshold: z.number().min(0).max(1).optional().default(0.7).describe('Confidence threshold for auto-updating tasks (0-1)')
-    },
-    async ({ workingDirectory, projectId, scanDepth, fileExtensions, autoUpdateTasks, confidenceThreshold }: {
-      workingDirectory: string;
-      projectId?: string;
-      scanDepth?: number;
-      fileExtensions?: string[];
-      autoUpdateTasks?: boolean;
-      confidenceThreshold?: number;
-    }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createProgressInferenceTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, projectId, scanDepth, fileExtensions, autoUpdateTasks, confidenceThreshold });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  // Register research tools (hybrid web + memory approach)
-  server.tool(
-    'research_task',
-    'Guide the AI agent to perform comprehensive web research for a task, with intelligent research suggestions and automatic memory storage of findings. Combines web research capabilities with local knowledge caching for optimal research workflow.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      taskId: z.string().describe('ID of the task to research'),
-      researchAreas: z.array(z.string()).optional().describe('Specific areas to research (auto-generated if not provided)'),
-      saveToMemories: z.boolean().optional().default(true).describe('Whether to save research findings to memories'),
-      checkExistingMemories: z.boolean().optional().default(true).describe('Whether to check existing memories first'),
-      researchDepth: z.enum(['quick', 'standard', 'comprehensive']).optional().default('standard').describe('Depth of research to perform')
-    },
-    async ({ workingDirectory, taskId, researchAreas, saveToMemories, checkExistingMemories, researchDepth }: {
-      workingDirectory: string;
-      taskId: string;
-      researchAreas?: string[];
-      saveToMemories?: boolean;
-      checkExistingMemories?: boolean;
-      researchDepth?: 'quick' | 'standard' | 'comprehensive';
-    }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const memoryStorage = await createMemoryStorage(workingDirectory, config);
-        const tool = createTaskResearchTool(storage, memoryStorage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, taskId, researchAreas, saveToMemories, checkExistingMemories, researchDepth });
-      } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  server.tool(
-    'generate_research_queries',
-    'Generate intelligent, targeted web search queries for task research. Provides structured search strategies to help AI agents find the most relevant information efficiently with optimized search terms and techniques.',
-    {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      taskId: z.string().describe('ID of the task to generate research queries for'),
-      queryTypes: z.array(z.enum(['implementation', 'best_practices', 'troubleshooting', 'alternatives', 'performance', 'security', 'examples', 'tools'])).optional().describe('Types of queries to generate'),
-      includeAdvanced: z.boolean().optional().default(false).describe('Include advanced search operators and techniques'),
-      targetYear: z.number().optional().default(new Date().getFullYear()).describe('Target year for recent information (default: current year)')
-    },
-    async ({ workingDirectory, taskId, queryTypes, includeAdvanced, targetYear }: {
-      workingDirectory: string;
-      taskId: string;
-      queryTypes?: string[];
-      includeAdvanced?: boolean;
-      targetYear?: number;
-    }) => {
-      try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createResearchQueriesGeneratorTool(storage, getWorkingDirectoryDescription, config);
-        return await tool.handler({ workingDirectory, taskId, queryTypes, includeAdvanced, targetYear });
       } catch (error) {
         return {
           content: [{
