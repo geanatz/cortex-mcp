@@ -117,29 +117,27 @@ export class FileStorage implements MemoryStorage {
       const frontmatterStr = frontmatterMatch[1];
       const body = frontmatterMatch[2].trim();
 
-      // Simple YAML parsing (for our limited use case)
       const frontmatter: Record<string, any> = {};
-      let currentKey: string | null = null;
-      let inMetadata = false;
       const metadata: Record<string, any> = {};
+      let inMetadata = false;
 
       for (const line of frontmatterStr.split('\n')) {
         if (line.startsWith('metadata:')) {
           inMetadata = true;
-          currentKey = 'metadata';
           continue;
         }
 
         if (inMetadata) {
           if (line.startsWith('  ')) {
-            // Metadata key-value pair
-            const match = line.match(/^\s{2}(\w+):\s*(.*)$/);
+            const match = line.match(/^\s{2}([\w-]+):\s*(.*)$/);
             if (match) {
               const [, key, value] = match;
               metadata[key] = this.parseYamlValue(value);
             }
-          } else if (line.trim() && !line.startsWith(' ')) {
-            // End of metadata block
+            continue;
+          }
+
+          if (line.trim() && !line.startsWith(' ')) {
             inMetadata = false;
             frontmatter['metadata'] = metadata;
           }
@@ -155,12 +153,12 @@ export class FileStorage implements MemoryStorage {
         }
       }
 
-      if (inMetadata) {
+      if (Object.keys(metadata).length > 0) {
         frontmatter['metadata'] = metadata;
       }
 
       return { frontmatter, body };
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -169,16 +167,16 @@ export class FileStorage implements MemoryStorage {
    * Parse a YAML value to its proper type
    */
   private parseYamlValue(value: string): any {
-    if (value === 'true') return true;
-    if (value === 'false') return false;
-    if (value === 'null' || value === '~') return null;
-    if (/^-?\d+$/.test(value)) return parseInt(value, 10);
-    if (/^-?\d+\.\d+$/.test(value)) return parseFloat(value);
-    // Remove surrounding quotes if present
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      return value.slice(1, -1);
+    const trimmed = value.trim();
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    if (trimmed === 'null' || trimmed === '~') return null;
+    if (/^-?\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+    if (/^-?\d+\.\d+$/.test(trimmed)) return parseFloat(trimmed);
+    if ((trimmed.startsWith('"') && trimmed.endsWith('"')) || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+      return trimmed.slice(1, -1);
     }
-    return value;
+    return trimmed;
   }
 
   /**
@@ -195,15 +193,10 @@ export class FileStorage implements MemoryStorage {
     lines.push(`createdAt: ${memory.createdAt}`);
     lines.push(`updatedAt: ${memory.updatedAt}`);
 
-    // Add metadata if present
     if (memory.metadata && Object.keys(memory.metadata).length > 0) {
       lines.push('metadata:');
       for (const [key, value] of Object.entries(memory.metadata)) {
-        if (typeof value === 'string') {
-          lines.push(`  ${key}: "${value.replace(/"/g, '\\"')}"`);
-        } else {
-          lines.push(`  ${key}: ${JSON.stringify(value)}`);
-        }
+        lines.push(`  ${key}: ${this.serializeYamlValue(value)}`);
       }
     }
 
@@ -212,6 +205,14 @@ export class FileStorage implements MemoryStorage {
     lines.push(memory.content);
 
     return lines.join('\n');
+  }
+
+  private serializeYamlValue(value: unknown): string {
+    if (value === null) return 'null';
+    if (value === undefined) return 'null';
+    if (typeof value === 'string') return `"${value.replace(/"/g, '\\"')}"`;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    return JSON.stringify(value);
   }
 
   /**
@@ -237,26 +238,26 @@ export class FileStorage implements MemoryStorage {
       const files = await fs.readdir(this.memoriesDir);
 
       for (const file of files) {
-        if (file.endsWith('.md')) {
-          const filePath = join(this.memoriesDir, file);
-          try {
-            const content = await fs.readFile(filePath, 'utf-8');
-            const parsed = this.parseMarkdownFile(content);
-            if (parsed && parsed.frontmatter.id === id) {
-              return {
-                path: filePath,
-                memory: this.fileToMemory(parsed.frontmatter, parsed.body)
-              };
-            }
-          } catch (error) {
-            // Skip invalid files
-            continue;
+        if (!file.endsWith('.md')) {
+          continue;
+        }
+        const filePath = join(this.memoriesDir, file);
+        try {
+          const content = await fs.readFile(filePath, 'utf-8');
+          const parsed = this.parseMarkdownFile(content);
+          if (parsed && parsed.frontmatter.id === id) {
+            return {
+              path: filePath,
+              memory: this.fileToMemory(parsed.frontmatter, parsed.body)
+            };
           }
+        } catch {
+          continue;
         }
       }
 
       return null;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -267,23 +268,25 @@ export class FileStorage implements MemoryStorage {
   private async resolveFileNameConflict(basePath: string): Promise<string> {
     let counter = 1;
     let filePath = basePath;
+    const ext = '.md';
+    const baseNameWithExt = basename(basePath);
+    const baseName = baseNameWithExt.replace(ext, '');
 
-    while (true) {
-      try {
-        await fs.access(filePath);
-        // File exists, try next number
-        const ext = '.md';
-        const baseNameWithExt = basename(basePath);
-        const baseName = baseNameWithExt.replace(ext, '');
-        filePath = join(this.memoriesDir, `${baseName}-${counter}${ext}`);
-        counter++;
-      } catch (error) {
-        // File doesn't exist, we can use this path
-        break;
-      }
+    while (await this.fileExists(filePath)) {
+      filePath = join(this.memoriesDir, `${baseName}-${counter}${ext}`);
+      counter++;
     }
 
     return filePath;
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -312,46 +315,45 @@ export class FileStorage implements MemoryStorage {
   /**
    * Get all memories with optional filtering
    */
-  async getMemories(agentId?: string, category?: string, limit?: number): Promise<Memory[]> {
+  async getMemories(category?: string, limit?: number): Promise<Memory[]> {
     const memories: Memory[] = [];
 
     try {
       const files = await fs.readdir(this.memoriesDir);
 
       for (const file of files) {
-        if (file.endsWith('.md')) {
-          const filePath = join(this.memoriesDir, file);
-          try {
-            const content = await fs.readFile(filePath, 'utf-8');
-            const parsed = this.parseMarkdownFile(content);
+        if (!file.endsWith('.md')) {
+          continue;
+        }
+        const filePath = join(this.memoriesDir, file);
+        try {
+          const content = await fs.readFile(filePath, 'utf-8');
+          const parsed = this.parseMarkdownFile(content);
 
-            if (parsed) {
-              const memory = this.fileToMemory(parsed.frontmatter, parsed.body);
-
-              // Apply category filter if specified
-              if (category && memory.category !== category) {
-                continue;
-              }
-
-              memories.push(memory);
-
-              // Apply limit if specified
-              if (limit && memories.length >= limit) {
-                return memories;
-              }
-            }
-          } catch (error) {
-            // Skip invalid files
+          if (!parsed) {
             continue;
           }
+
+          const memory = this.fileToMemory(parsed.frontmatter, parsed.body);
+
+          if (category && memory.category !== category) {
+            continue;
+          }
+
+          memories.push(memory);
+
+          if (limit && memories.length >= limit) {
+            return memories;
+          }
+        } catch {
+          continue;
         }
       }
 
-      // Sort by updatedAt descending (most recent first)
       memories.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
       return memories;
-    } catch (error) {
+    } catch {
       return [];
     }
   }
@@ -407,7 +409,7 @@ export class FileStorage implements MemoryStorage {
     try {
       await fs.unlink(result.path);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -416,58 +418,60 @@ export class FileStorage implements MemoryStorage {
    * Search memories by text content
    */
   async searchMemories(input: SearchMemoryInput): Promise<MemorySearchResult[]> {
-    const query = typeof input.query === 'string' ? input.query.toLowerCase() : '';
+    const normalizedQuery = typeof input.query === 'string' ? input.query.trim().toLowerCase() : '';
+    if (!normalizedQuery) {
+      return [];
+    }
+
     const limit = input.limit || 10;
-    const threshold = input.threshold || 0.3;
+    const threshold = input.threshold ?? 0.3;
     const results: MemorySearchResult[] = [];
 
-    // Get all memories first
-    const allMemories = await this.getMemories(undefined, input.category);
+    const queryRegex = new RegExp(this.escapeRegex(normalizedQuery), 'g');
+    const allMemories = await this.getMemories(input.category);
 
     for (const memory of allMemories) {
-      // Simple text search in title, content, and category
-      const titleMatch = memory.title.toLowerCase().includes(query);
-      const contentMatch = memory.content.toLowerCase().includes(query);
-      const categoryMatch = memory.category?.toLowerCase().includes(query) || false;
+      const titleLower = memory.title.toLowerCase();
+      const contentLower = memory.content.toLowerCase();
+      const categoryLower = memory.category?.toLowerCase() || '';
 
-      if (titleMatch || contentMatch || categoryMatch) {
-        // Calculate simple relevance score based on match position and frequency
-        let score = 0;
+      const titleMatch = titleLower.includes(normalizedQuery);
+      const contentMatch = contentLower.includes(normalizedQuery);
+      const categoryMatch = categoryLower.includes(normalizedQuery);
 
-        if (titleMatch) {
-          const titleLower = memory.title.toLowerCase();
-          const firstIndex = titleLower.indexOf(query);
-          const occurrences = (titleLower.match(new RegExp(this.escapeRegex(query), 'g')) || []).length;
-          // Higher score for title matches (more important)
-          score += (1 - firstIndex / titleLower.length) * 0.6 + (occurrences / 5) * 0.4;
-        }
+      if (!(titleMatch || contentMatch || categoryMatch)) {
+        continue;
+      }
 
-        if (contentMatch) {
-          const contentLower = memory.content.toLowerCase();
-          const firstIndex = contentLower.indexOf(query);
-          const occurrences = (contentLower.match(new RegExp(this.escapeRegex(query), 'g')) || []).length;
-          // Lower score for content matches
-          score += (1 - firstIndex / contentLower.length) * 0.3 + (occurrences / 10) * 0.3;
-        }
+      let score = 0;
 
-        if (categoryMatch) {
-          score += 0.2; // Bonus for category match
-        }
+      if (titleMatch) {
+        const firstIndex = titleLower.indexOf(normalizedQuery);
+        const occurrences = (titleLower.match(queryRegex) || []).length;
+        score += (1 - firstIndex / Math.max(titleLower.length, 1)) * 0.6 + (occurrences / 5) * 0.4;
+      }
 
-        const normalizedScore = Math.min(score, 1); // Cap at 1.0
+      if (contentMatch) {
+        const firstIndex = contentLower.indexOf(normalizedQuery);
+        const occurrences = (contentLower.match(queryRegex) || []).length;
+        score += (1 - firstIndex / Math.max(contentLower.length, 1)) * 0.3 + (occurrences / 10) * 0.3;
+      }
 
-        // Only include results above threshold
-        if (normalizedScore >= threshold) {
-          results.push({
-            memory,
-            score: normalizedScore,
-            distance: 1 - normalizedScore // Convert score to distance
-          });
-        }
+      if (categoryMatch) {
+        score += 0.2;
+      }
+
+      const normalizedScore = Math.min(score, 1);
+
+      if (normalizedScore >= threshold) {
+        results.push({
+          memory,
+          score: normalizedScore,
+          distance: 1 - normalizedScore
+        });
       }
     }
 
-    // Sort by score (highest first) and apply limit
     results.sort((a, b) => b.score - a.score);
     return results.slice(0, limit);
   }
@@ -480,19 +484,10 @@ export class FileStorage implements MemoryStorage {
   }
 
   /**
-   * Delete all memories for a specific agent (not applicable for simplified schema)
-   */
-  async deleteMemoriesByAgent(agentId: string): Promise<number> {
-    // Since we removed agentId from the schema, this method returns 0
-    return 0;
-  }
-
-  /**
    * Get memory statistics
    */
   async getStatistics(): Promise<{
     totalMemories: number;
-    memoriesByAgent: Record<string, number>;
     memoriesByCategory: Record<string, number>;
     oldestMemory?: string;
     newestMemory?: string;
@@ -518,7 +513,6 @@ export class FileStorage implements MemoryStorage {
 
     return {
       totalMemories: memories.length,
-      memoriesByAgent: {}, // Empty since we removed agentId
       memoriesByCategory,
       oldestMemory,
       newestMemory

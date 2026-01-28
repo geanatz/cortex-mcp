@@ -11,12 +11,11 @@ export interface MemoryStorage {
 
   /**
    * Get all memories with optional filtering
-   * @param agentId - Optional agent identifier filter
    * @param category - Optional category filter
    * @param limit - Optional limit on number of results
    * @returns Promise resolving to array of memories
    */
-  getMemories(agentId?: string, category?: string, limit?: number): Promise<Memory[]>;
+  getMemories(category?: string, limit?: number): Promise<Memory[]>;
 
   /**
    * Get a specific memory by ID
@@ -48,18 +47,11 @@ export interface MemoryStorage {
   deleteMemory(id: string): Promise<boolean>;
 
   /**
-   * Search memories by semantic similarity
+   * Search memories by text relevance
    * @param input - Search input parameters
    * @returns Promise resolving to array of search results with scores
    */
   searchMemories(input: SearchMemoryInput): Promise<MemorySearchResult[]>;
-
-  /**
-   * Delete all memories for a specific agent
-   * @param agentId - Agent identifier
-   * @returns Promise resolving to number of deleted memories
-   */
-  deleteMemoriesByAgent(agentId: string): Promise<number>;
 
   /**
    * Get embedding corpus statistics (if supported)
@@ -78,7 +70,6 @@ export interface MemoryStorage {
    */
   getStatistics(): Promise<{
     totalMemories: number;
-    memoriesByAgent: Record<string, number>;
     memoriesByCategory: Record<string, number>;
     oldestMemory?: string;
     newestMemory?: string;

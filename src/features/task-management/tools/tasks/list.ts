@@ -68,9 +68,8 @@ export function createListTasksTool(storage: Storage) {
               const indent = '  '.repeat(baseLevel);
               const icon = task.completed ? '✅' : '⏳';
               const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
-              const timeText = task.estimatedHours ? ` (${task.estimatedHours}h)` : '';
 
-              let taskLine = `${indent}${icon} **${task.id}**${statusText}${timeText}\n`;
+              let taskLine = `${indent}${icon} **${task.id}**${statusText}\n`;
               taskLine += `${indent}   Level: ${task.level || 0}\n`;
               taskLine += `${indent}   ${task.details}\n`;
 
@@ -140,9 +139,8 @@ ${hierarchyText}
           const taskList = filteredTasks.map(task => {
             const icon = task.completed ? '✅' : '⏳';
             const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
-            const timeText = task.estimatedHours ? ` (${task.estimatedHours}h)` : '';
 
-            return `${icon} **${task.id}**${statusText}${timeText}
+            return `${icon} **${task.id}**${statusText}
    Level: ${task.level || 0}
    ${task.details}
    ${task.tags && task.tags.length > 0 ? `Tags: ${task.tags.join(', ')}` : ''}

@@ -11,6 +11,7 @@ import { createCreateTaskTool } from './features/task-management/tools/tasks/cre
 import { createGetTaskTool } from './features/task-management/tools/tasks/get.js';
 import { createUpdateTaskTool } from './features/task-management/tools/tasks/update.js';
 import { createDeleteTaskTool } from './features/task-management/tools/tasks/delete.js';
+import { createMoveTaskTool } from './features/task-management/tools/tasks/move.js';
 
 // Memory tools
 import { createCreateMemoryTool } from './features/agent-memories/tools/memories/create.js';
@@ -84,35 +85,27 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
 
   server.tool(
     'create_task',
-    'Transform goals into actionable, trackable tasks with advanced features including dependencies, priorities, complexity estimation, and workflow management. Build structured workflows that break down complex work into manageable components with unlimited hierarchy depth.',
+    'Transform goals into actionable, trackable tasks. Build structured workflows that break down complex work into manageable components with unlimited hierarchy depth.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      name: z.string().describe('The name/title of the new task'),
-      details: z.string().describe('Detailed description of what the task involves'),
+      details: z.string().describe('Detailed description of what the task involves (used to generate ID)'),
       parentId: z.string().optional().describe('Parent task ID for unlimited nesting (optional - creates top-level task if not specified)'),
       dependsOn: z.array(z.string()).optional().describe('Array of task IDs that must be completed before this task'),
-      priority: z.number().min(1).max(10).optional().describe('Task priority level (1-10, where 10 is highest priority)'),
-      complexity: z.number().min(1).max(10).optional().describe('Estimated complexity/effort (1-10, where 10 is most complex)'),
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional().describe('Initial task status (defaults to pending)'),
-      tags: z.array(z.string()).optional().describe('Tags for categorization and filtering'),
-      estimatedHours: z.number().min(0).optional().describe('Estimated time to complete in hours')
+      tags: z.array(z.string()).optional().describe('Tags for categorization and filtering')
     },
-    async ({ workingDirectory, name, details, parentId, dependsOn, priority, complexity, status, tags, estimatedHours }: {
+    async ({ workingDirectory, details, parentId, dependsOn, status, tags }: {
       workingDirectory: string;
-      name: string;
       details: string;
       parentId?: string;
       dependsOn?: string[];
-      priority?: number;
-      complexity?: number;
       status?: 'pending' | 'in-progress' | 'blocked' | 'done';
       tags?: string[];
-      estimatedHours?: number;
     }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createCreateTaskTool(storage);
-        return await tool.handler({ name, details, parentId, dependsOn, priority, complexity, status, tags, estimatedHours });
+        return await tool.handler({ details, parentId, dependsOn, status, tags });
       } catch (error) {
         return {
           content: [{
@@ -151,41 +144,33 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
 
   server.tool(
     'update_task',
-    'Adapt and refine tasks with comprehensive updates including dependencies, priorities, complexity, status, tags, and time tracking. Keep your workflow current and accurate with advanced task management capabilities including unlimited hierarchy movement.',
+    'Adapt and refine tasks with comprehensive updates including dependencies, status, tags, and time tracking. Keep your workflow current and accurate with advanced task management capabilities including unlimited hierarchy movement.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       id: z.string().describe('The unique identifier of the task to update'),
-      name: z.string().optional().describe('New name/title for the task (optional)'),
       details: z.string().optional().describe('New detailed description for the task (optional)'),
       completed: z.boolean().optional().describe('Mark task as completed (true) or incomplete (false) (optional)'),
       parentId: z.string().optional().describe('Updated parent task ID for moving between hierarchy levels (optional - use null/empty to move to top level)'),
       dependsOn: z.array(z.string()).optional().describe('Updated array of task IDs that must be completed before this task'),
-      priority: z.number().min(1).max(10).optional().describe('Updated task priority level (1-10, where 10 is highest priority)'),
-      complexity: z.number().min(1).max(10).optional().describe('Updated complexity/effort estimate (1-10, where 10 is most complex)'),
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional().describe('Updated task status'),
       tags: z.array(z.string()).optional().describe('Updated tags for categorization and filtering'),
-      estimatedHours: z.number().min(0).optional().describe('Updated estimated time to complete in hours'),
       actualHours: z.number().min(0).optional().describe('Actual time spent on the task in hours')
     },
-    async ({ workingDirectory, id, name, details, completed, parentId, dependsOn, priority, complexity, status, tags, estimatedHours, actualHours }: {
+    async ({ workingDirectory, id, details, completed, parentId, dependsOn, status, tags, actualHours }: {
       workingDirectory: string;
       id: string;
-      name?: string;
       details?: string;
       completed?: boolean;
       parentId?: string;
       dependsOn?: string[];
-      priority?: number;
-      complexity?: number;
       status?: 'pending' | 'in-progress' | 'blocked' | 'done';
       tags?: string[];
-      estimatedHours?: number;
       actualHours?: number;
     }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createUpdateTaskTool(storage);
-        return await tool.handler({ id, name, details, completed, parentId, dependsOn, priority, complexity, status, tags, estimatedHours, actualHours });
+        return await tool.handler({ id, details, completed, parentId, dependsOn, status, tags, actualHours });
       } catch (error) {
         return {
           content: [{
@@ -234,90 +219,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     async ({ workingDirectory, taskId, newParentId }: { workingDirectory: string; taskId: string; newParentId?: string }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
-
-        if (!taskId || taskId.trim().length === 0) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Task ID is required.'
-            }],
-            isError: true
-          };
-        }
-
-        const task = await storage.getTask(taskId.trim());
-        if (!task) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: Task with ID "${taskId}" not found. Use list_tasks to see available tasks.`
-            }],
-            isError: true
-          };
-        }
-
-        const oldParent = task.parentId ? await storage.getTask(task.parentId) : null;
-        const newParent = newParentId ? await storage.getTask(newParentId.trim()) : null;
-
-        // Validate new parent if specified
-        if (newParentId && !newParent) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: New parent task with ID "${newParentId}" not found.`
-            }],
-            isError: true
-          };
-        }
-
-        const movedTask = await storage.moveTask(taskId.trim(), newParentId?.trim());
-        if (!movedTask) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: Failed to move task with ID "${taskId}".`
-            }],
-            isError: true
-          };
-        }
-
-        // Build path information
-        const ancestors = await storage.getTaskAncestors(movedTask.id);
-
-        const oldPath = oldParent
-          ? `${oldParent.name} → ${task.name}`
-          : task.name;
-
-        const newPath = newParent
-          ? `${ancestors.map(a => a.name).join(' → ')} → ${movedTask.name}`
-          : movedTask.name;
-
-        const levelIndicator = '  '.repeat(movedTask.level || 0) + '→';
-
+        const tool = createMoveTaskTool(storage);
+        return await tool.handler({ taskId, newParentId });
+      } catch (error) {
         return {
           content: [{
             type: 'text' as const,
-            text: `✅ **Task Moved Successfully!**
-
-**${levelIndicator} ${movedTask.name}** (ID: ${movedTask.id})
-
-📍 **Movement Summary:**
-• From: ${oldPath}
-• To: ${newPath}
-• New Level: ${movedTask.level || 0} ${(movedTask.level || 0) === 0 ? '(Top-level)' : `(${movedTask.level} level${(movedTask.level || 0) > 1 ? 's' : ''} deep)`}
-• New Parent: ${newParent ? `${newParent.name} (${newParent.id})` : 'None (Top-level)'}
-
-🎯 **Next Steps:**
-• Use \`list_tasks\` with \`showHierarchy: true\` to see the updated structure
-• Continue organizing with \`move_task\` or \`update_task\`
-• Add more nested tasks with \`create_task\` using parentId`
-          }]
-        };
-      } catch (error: any) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error moving task: ${error instanceof Error ? error.message : 'Unknown error'}`
+            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
           }],
           isError: true
         };

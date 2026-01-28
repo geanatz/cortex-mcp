@@ -1,6 +1,6 @@
 # API Reference
 
-Complete reference for all MCP tools provided by the Agentic Tools MCP Server.
+Complete reference for all MCP tools provided by the Cortex MCP Server.
 
 ## Table of Contents
 
@@ -11,79 +11,33 @@ Complete reference for all MCP tools provided by the Agentic Tools MCP Server.
 
 ## Task Management Tools
 
-### Projects
-
-#### `list_projects_Agentic_Tools`
-List all projects in the working directory.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-
-**Returns:** List of projects with details
-
-#### `create_project_Agentic_Tools`
-Create a new project.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `name` (string, required): Project name
-- `description` (string, required): Project description
-
-**Returns:** Created project object
-
-#### `get_project_Agentic_Tools`
-Get a specific project by ID.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `id` (string, required): Project ID
-
-**Returns:** Project object or error if not found
-
-#### `update_project_Agentic_Tools`
-Update an existing project.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `id` (string, required): Project ID
-- `name` (string, optional): Updated name
-- `description` (string, optional): Updated description
-
-**Returns:** Updated project object
-
-#### `delete_project_Agentic_Tools`
-Delete a project and all its tasks/subtasks.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `id` (string, required): Project ID
-- `confirm` (boolean, required): Confirmation flag
-
-**Returns:** Success message or error
-
 ### Tasks
 
-#### `list_tasks_Agentic_Tools`
-List tasks with optional filtering.
+#### `list_tasks`
+List tasks with optional filtering and hierarchical display.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
-- `projectId` (string, optional): Filter by project ID
+- `parentId` (string, optional): Filter by parent task ID
+- `showHierarchy` (boolean, optional): Show hierarchical tree (default: true)
+- `includeCompleted` (boolean, optional): Include completed tasks (default: true)
 
-**Returns:** List of tasks
+**Returns:** List of tasks with optional hierarchy
 
-#### `create_task_Agentic_Tools`
+#### `create_task`
 Create a new task.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
-- `name` (string, required): Task name
 - `details` (string, required): Task details
-- `projectId` (string, required): Parent project ID
+- `parentId` (string, optional): Parent task ID for nesting
+- `dependsOn` (string[], optional): Task dependencies
+- `status` (string, optional): Status (`pending`, `in-progress`, `blocked`, `done`)
+- `tags` (string[], optional): Tags for categorization
 
 **Returns:** Created task object
 
-#### `get_task_Agentic_Tools`
+#### `get_task`
 Get a specific task by ID.
 
 **Parameters:**
@@ -92,20 +46,24 @@ Get a specific task by ID.
 
 **Returns:** Task object or error if not found
 
-#### `update_task_Agentic_Tools`
+#### `update_task`
 Update an existing task.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
 - `id` (string, required): Task ID
-- `name` (string, optional): Updated name
 - `details` (string, optional): Updated details
+- `parentId` (string, optional): Updated parent task ID
 - `completed` (boolean, optional): Completion status
+- `dependsOn` (string[], optional): Updated dependencies
+- `status` (string, optional): Updated status
+- `tags` (string[], optional): Updated tags
+- `actualHours` (number, optional): Actual hours spent
 
 **Returns:** Updated task object
 
-#### `delete_task_Agentic_Tools`
-Delete a task and all its subtasks.
+#### `delete_task`
+Delete a task and all its child tasks.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
@@ -114,99 +72,50 @@ Delete a task and all its subtasks.
 
 **Returns:** Success message or error
 
-### Subtasks
-
-#### `list_subtasks_Agentic_Tools`
-List subtasks with optional filtering.
+#### `move_task`
+Move a task to a different parent in the hierarchy.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
-- `taskId` (string, optional): Filter by task ID
-- `projectId` (string, optional): Filter by project ID
+- `taskId` (string, required): Task ID to move
+- `newParentId` (string, optional): New parent task ID
 
-**Returns:** List of subtasks
-
-#### `create_subtask_Agentic_Tools`
-Create a new subtask.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `name` (string, required): Subtask name
-- `details` (string, required): Subtask details
-- `taskId` (string, required): Parent task ID
-
-**Returns:** Created subtask object
-
-#### `get_subtask_Agentic_Tools`
-Get a specific subtask by ID.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `id` (string, required): Subtask ID
-
-**Returns:** Subtask object or error if not found
-
-#### `update_subtask_Agentic_Tools`
-Update an existing subtask.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `id` (string, required): Subtask ID
-- `name` (string, optional): Updated name
-- `details` (string, optional): Updated details
-- `completed` (boolean, optional): Completion status
-
-**Returns:** Updated subtask object
-
-#### `delete_subtask_Agentic_Tools`
-Delete a subtask.
-
-**Parameters:**
-- `workingDirectory` (string, required): Project working directory
-- `id` (string, required): Subtask ID
-- `confirm` (boolean, required): Confirmation flag
-
-**Returns:** Success message or error
+**Returns:** Updated task object
 
 ## Agent Memories Tools
 
-### `create_memory_Agentic_Tools`
-Create a new memory with automatic embedding generation.
+### `create_memory`
+Create a new memory.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
-- `content` (string, required): Memory content text (max 10,000 chars)
+- `title` (string, required): Memory title (max 50 chars)
+- `content` (string, required): Memory content text
 - `metadata` (object, optional): Additional metadata
-- `agentId` (string, optional): Agent identifier (max 100 chars)
 - `category` (string, optional): Memory category (max 100 chars)
-- `importance` (number, optional): Importance score (1-10)
-- `embedding` (number[], optional): Pre-computed embedding vector
 
-**Returns:** Created memory object with generated ID and embedding
+**Returns:** Created memory object
 
 **Example:**
 ```json
 {
   "workingDirectory": "/my/project",
-  "content": "User prefers dark mode interface",
+  "title": "User prefers dark mode interface",
+  "content": "The user prefers dark mode interfaces for reduced eye strain.",
   "metadata": {"source": "user_preference"},
-  "agentId": "assistant-1",
-  "category": "preferences",
-  "importance": 8
+  "category": "preferences"
 }
 ```
 
-### `search_memories_Agentic_Tools`
-Search memories using semantic similarity.
+### `search_memories`
+Search memories using text matching across title, content, and category.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
 - `query` (string, required): Search query text (max 1,000 chars)
 - `limit` (number, optional): Maximum results (1-100, default: 10)
-- `threshold` (number, optional): Similarity threshold (0-1, default: 0.3)
-- `agentId` (string, optional): Filter by agent ID
+- `threshold` (number, optional): Relevance threshold (0-1, default: 0.3)
 - `category` (string, optional): Filter by category
-- `minImportance` (number, optional): Minimum importance filter (1-10)
 
 **Returns:** Array of search results with similarity scores
 
@@ -221,7 +130,7 @@ Search memories using semantic similarity.
 }
 ```
 
-### `get_memory_Agentic_Tools`
+### `get_memory`
 Retrieve a specific memory by ID.
 
 **Parameters:**
@@ -230,33 +139,32 @@ Retrieve a specific memory by ID.
 
 **Returns:** Memory object with full details or error if not found
 
-### `list_memories_Agentic_Tools`
+### `list_memories`
 List memories with optional filtering.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
-- `agentId` (string, optional): Filter by agent ID (max 100 chars)
 - `category` (string, optional): Filter by category (max 100 chars)
 - `limit` (number, optional): Maximum results (1-1000, default: 50)
 
 **Returns:** Array of memories sorted by creation date (newest first)
 
-### `update_memory_Agentic_Tools`
+### `update_memory`
 Update an existing memory.
 
 **Parameters:**
 - `workingDirectory` (string, required): Project working directory
 - `id` (string, required): Memory ID
-- `content` (string, optional): Updated content (max 10,000 chars)
+- `title` (string, optional): Updated title (max 50 chars)
+- `content` (string, optional): Updated content
 - `metadata` (object, optional): Updated metadata
 - `category` (string, optional): Updated category (max 100 chars)
-- `importance` (number, optional): Updated importance (1-10)
 
-**Returns:** Updated memory object with regenerated embedding (if content changed)
+**Returns:** Updated memory object
 
 **Note:** At least one optional parameter must be provided.
 
-### `delete_memory_Agentic_Tools`
+### `delete_memory`
 Delete a memory permanently.
 
 **Parameters:**

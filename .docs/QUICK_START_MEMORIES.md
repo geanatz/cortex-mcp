@@ -5,14 +5,14 @@ Get started with the Agent Memories feature in just a few minutes!
 ## Prerequisites
 
 - Node.js 18+ installed
-- Agentic Tools MCP Server v1.2.0+
+- Cortex MCP Server v3.0.0+
 - MCP-compatible client (Claude Desktop, AugmentCode, etc.)
 
 ## Installation
 
 ```bash
 # Install or update to latest version
-npx -y @pimzino/agentic-tools-mcp
+npx -y @geanatz/cortex-mcp
 ```
 
 ## Basic Usage
@@ -75,7 +75,7 @@ await update_memory({
 
 ```javascript
 // Delete a memory (requires confirmation)
-await delete_memory_Agentic_Tools({
+await delete_memory({
   workingDirectory: "/path/to/your/project",
   id: "memory-id-here",
   confirm: true
@@ -113,7 +113,7 @@ await create_memory({
   title: "User works in healthcare, needs HIPAA compliance",
   content: "The user mentioned they work in the healthcare industry and their applications must be HIPAA compliant. This affects data handling, storage, encryption requirements, and audit logging. All patient data must be encrypted at rest and in transit.",
   category: "context",
-  metadata: { industry: "healthcare", compliance: "HIPAA", priority: "critical" }
+  metadata: { industry: "healthcare", compliance: "HIPAA", severity: "critical" }
 });
 ```
 
@@ -234,16 +234,16 @@ metadata: {
 Memories are stored in your project directory:
 ```
 your-project/
-├── .agentic-tools-mcp/
+├── .cortex/
 │   ├── tasks/              # Task management data
-│   │   └── tasks.json      # Projects, tasks, and subtasks data
-│   └── memories/           # JSON file storage
-│       ├── preferences/    # User preferences category
-│       │   └── User_prefers_dark_mode_and_minimal_UI.json
-│       ├── technical/      # Technical information category
-│       │   └── React_TypeScript_project_with_strict_ESLint.json
-│       └── context/        # Context information category
-│           └── User_works_in_healthcare_needs_HIPAA_compliance.json
+│   │   ├── 001-design-mockups/
+│   │   │   └── task.json
+│   │   └── 002-create-wireframes/
+│   │       └── task.json
+│   └── memories/           # Markdown file storage
+│       ├── user-prefers-dark-mode-and-minimal-ui.md
+│       ├── react-typescript-project-with-strict-eslint.md
+│       └── user-works-in-healthcare-needs-hipaa-compliance.md
 ├── src/
 └── package.json
 ```

@@ -24,8 +24,6 @@ export interface Task {
   status?: 'pending' | 'in-progress' | 'blocked' | 'done';
   /** Tags for categorization and filtering */
   tags?: string[];
-  /** Estimated time to complete in hours */
-  estimatedHours?: number;
   /** Actual time spent in hours */
   actualHours?: number;
   /** Nesting level for UI optimization (calculated field) */
@@ -46,8 +44,6 @@ export interface CreateTaskInput {
   status?: 'pending' | 'in-progress' | 'blocked' | 'done';
   /** Tags for categorization and filtering */
   tags?: string[];
-  /** Estimated time to complete in hours */
-  estimatedHours?: number;
 }
 
 /**
@@ -66,8 +62,6 @@ export interface UpdateTaskInput {
   status?: 'pending' | 'in-progress' | 'blocked' | 'done';
   /** Tags for categorization and filtering */
   tags?: string[];
-  /** Estimated time to complete in hours */
-  estimatedHours?: number;
   /** Actual time spent in hours */
   actualHours?: number;
 }

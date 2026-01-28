@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { MemoryStorage } from '../../storage/storage.js';
 
 /**
- * Search memories by semantic similarity
+ * Search memories by text relevance
  *
  * @param storage - Memory storage instance
  * @returns MCP tool handler for searching memories
@@ -79,8 +79,7 @@ export function createSearchMemoriesTool(storage: MemoryStorage) {
 
         const results = await storage.searchMemories(searchInput);
 
-        // Get the actual threshold used (from config if not provided)
-        const actualThreshold = threshold ?? (storage as any).config?.defaultThreshold ?? 0.3;
+        const actualThreshold = threshold ?? 0.3;
 
         if (results.length === 0) {
           return {

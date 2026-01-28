@@ -18,16 +18,14 @@ export function createCreateTaskTool(storage: Storage) {
       parentId: z.string().optional(),
       dependsOn: z.array(z.string()).optional(),
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional(),
-      tags: z.array(z.string()).optional(),
-      estimatedHours: z.number().min(0).optional()
+      tags: z.array(z.string()).optional()
     },
-    handler: async ({ details, parentId, dependsOn, status, tags, estimatedHours }: {
+    handler: async ({ details, parentId, dependsOn, status, tags }: {
       details: string;
       parentId?: string;
       dependsOn?: string[];
       status?: 'pending' | 'in-progress' | 'blocked' | 'done';
       tags?: string[];
-      estimatedHours?: number;
     }) => {
       try {
         // Validate inputs
@@ -97,7 +95,6 @@ export function createCreateTaskTool(storage: Storage) {
           dependsOn: dependsOn || [],
           status: status || 'pending',
           tags: tags || [],
-          estimatedHours: estimatedHours,
           level: taskLevel
         };
 
@@ -124,7 +121,6 @@ Path: ${hierarchyPath}
 • Status: ${createdTask.status}
 • Tags: ${createdTask.tags?.join(', ') || 'None'}
 • Dependencies: ${createdTask.dependsOn?.length ? createdTask.dependsOn.join(', ') : 'None'}
-• Estimated Hours: ${createdTask.estimatedHours || 'Not set'}
 • Created: ${new Date(createdTask.createdAt).toLocaleString()}
 
 🎯 **Next Steps:**

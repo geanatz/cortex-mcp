@@ -9,5 +9,3 @@ export type {
   MemorySearchResult,
   MemoryConfig,
 } from './memory.js';
-
-export { DEFAULT_MEMORY_CONFIG } from './memory.js';

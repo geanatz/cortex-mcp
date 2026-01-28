@@ -44,11 +44,7 @@ export function createListMemoriesTool(storage: MemoryStorage) {
           };
         }
 
-        const memories = await storage.getMemories(
-          undefined, // agentId removed
-          category?.trim(),
-          limit
-        );
+        const memories = await storage.getMemories(category?.trim(), limit);
 
         if (memories.length === 0) {
           return {

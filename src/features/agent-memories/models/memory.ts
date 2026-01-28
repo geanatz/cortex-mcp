@@ -54,7 +54,7 @@ export interface SearchMemoryInput {
   query: string;
   /** Maximum number of results to return */
   limit?: number;
-  /** Minimum similarity threshold (0-1) */
+  /** Minimum relevance threshold (0-1) */
   threshold?: number;
   /** Optional category filter */
   category?: string;
@@ -66,7 +66,7 @@ export interface SearchMemoryInput {
 export interface MemorySearchResult {
   /** The memory object */
   memory: Memory;
-  /** Similarity score (0-1, higher is more similar) */
+  /** Relevance score (0-1, higher is more relevant) */
   score: number;
   /** Distance metric from the query */
   distance: number;
@@ -81,11 +81,3 @@ export interface MemoryConfig {
   /** Default maximum results for searches */
   defaultLimit: number;
 }
-
-/**
- * Default configuration for the memory system
- */
-export const DEFAULT_MEMORY_CONFIG: MemoryConfig = {
-  defaultThreshold: 0.3, // For text-based search relevance
-  defaultLimit: 10,
-};

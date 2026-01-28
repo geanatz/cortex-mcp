@@ -11,7 +11,7 @@ import { Storage } from '../../storage/storage.js';
 export function createUpdateTaskTool(storage: Storage) {
   return {
     name: 'update_task',
-    description: 'Update task properties including details, parent relationship (parentId), completion status, dependencies, status, tags, and time estimates. Use parentId to move tasks within the hierarchy.',
+    description: 'Update task properties including details, parent relationship (parentId), completion status, dependencies, status, tags, and time tracking. Use parentId to move tasks within the hierarchy.',
     inputSchema: {
       id: z.string(),
       details: z.string().optional(),
@@ -20,10 +20,9 @@ export function createUpdateTaskTool(storage: Storage) {
       dependsOn: z.array(z.string()).optional(),
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional(),
       tags: z.array(z.string()).optional(),
-      estimatedHours: z.number().min(0).optional(),
       actualHours: z.number().min(0).optional()
     },
-    handler: async ({ id, details, parentId, completed, dependsOn, status, tags, estimatedHours, actualHours }: {
+    handler: async ({ id, details, parentId, completed, dependsOn, status, tags, actualHours }: {
       id: string;
       details?: string;
       parentId?: string;
@@ -31,7 +30,6 @@ export function createUpdateTaskTool(storage: Storage) {
       dependsOn?: string[];
       status?: 'pending' | 'in-progress' | 'blocked' | 'done';
       tags?: string[];
-      estimatedHours?: number;
       actualHours?: number;
     }) => {
       try {
@@ -67,8 +65,8 @@ export function createUpdateTaskTool(storage: Storage) {
         }
 
         if (details === undefined && parentId === undefined && completed === undefined &&
-            dependsOn === undefined && status === undefined && tags === undefined && 
-            estimatedHours === undefined && actualHours === undefined) {
+            dependsOn === undefined && status === undefined && tags === undefined &&
+            actualHours === undefined) {
           return {
             content: [{
               type: 'text' as const,
@@ -182,10 +180,6 @@ export function createUpdateTaskTool(storage: Storage) {
           updates.tags = tags;
         }
 
-        if (estimatedHours !== undefined) {
-          updates.estimatedHours = estimatedHours;
-        }
-
         if (actualHours !== undefined) {
           updates.actualHours = actualHours;
         }
@@ -213,7 +207,6 @@ export function createUpdateTaskTool(storage: Storage) {
         if (dependsOn !== undefined) changedFields.push('dependencies');
         if (status !== undefined) changedFields.push('status');
         if (tags !== undefined) changedFields.push('tags');
-        if (estimatedHours !== undefined) changedFields.push('estimated hours');
         if (actualHours !== undefined) changedFields.push('actual hours');
 
         const taskStatus = updatedTask.status || (updatedTask.completed ? 'done' : 'pending');
@@ -243,7 +236,6 @@ Path: ${hierarchyPath}
 • Completed: ${updatedTask.completed ? 'Yes' : 'No'}
 • Tags: ${updatedTask.tags?.join(', ') || 'None'}
 • Dependencies: ${updatedTask.dependsOn?.length ? updatedTask.dependsOn.join(', ') : 'None'}
-• Estimated Hours: ${updatedTask.estimatedHours || 'Not set'}
 • Actual Hours: ${updatedTask.actualHours || 'Not set'}
 • Details: ${updatedTask.details}
 • Last Updated: ${new Date(updatedTask.updatedAt).toLocaleString()}

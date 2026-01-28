@@ -15,23 +15,20 @@ This MCP server is part of a complete task and memory management ecosystem:
 - **🖥️ [VS Code Extension](https://github.com/Pimzino/agentic-tools-mcp-companion)** - Beautiful GUI interface for managing tasks and memories directly in VS Code
 - **⚡ MCP Server** (this repository) - Advanced AI agent tools and API for intelligent task management
 
-> **💡 Pro Tip**: Use both together for the ultimate productivity experience! The VS Code extension provides a visual interface while the MCP server enables AI assistant integration with advanced features like PRD parsing, task recommendations, and research capabilities.
+> **💡 Pro Tip**: Use both together for the ultimate productivity experience! The VS Code extension provides a visual interface while the MCP server enables AI assistant integration with structured task and memory workflows.
 
 ## Features
 
-### 🎯 Advanced Task Management System with Unlimited Hierarchy (v1.8.0)
-- **Projects**: Organize work into distinct projects with descriptions
+### 🎯 Advanced Task Management System with Unlimited Hierarchy
 - **Unified Task Model**: Single task interface supporting unlimited nesting depth
-- **Unlimited Hierarchy**: Tasks → Subtasks → Sub-subtasks → infinite depth nesting
-- **Rich Features at All Levels**: Every task gets priority, complexity, dependencies, tags, and time tracking
+- **Unlimited Hierarchy**: Tasks → Subtasks → deeper levels as needed
 - **Parent-Child Relationships**: Flexible hierarchy organization with `parentId` field
 - **Level Tracking**: Automatic hierarchy level calculation and visual indicators
 - **Tree Visualization**: Comprehensive hierarchical tree display with unlimited depth
 - **Intelligent Dependencies**: Task dependency management with validation across hierarchy
-- **Priority & Complexity**: 1-10 scale prioritization and complexity estimation at every level
 - **Enhanced Status Tracking**: pending, in-progress, blocked, done status workflow
 - **Tag-Based Organization**: Flexible categorization and filtering
-- **Time Tracking**: Estimated and actual hours for project planning
+- **Time Tracking**: Actual hours for project planning
 - **Progress Tracking**: Monitor completion status at all hierarchy levels
 - **Project-Specific Storage**: Each working directory has isolated task data
 - **Git-Trackable**: Task data can be committed alongside your code
@@ -41,33 +38,18 @@ This MCP server is part of a complete task and memory management ecosystem:
 - **Intelligent Search**: Multi-field text search with relevance scoring across titles, content, and categories
 - **Smart Ranking**: Advanced scoring algorithm prioritizes title matches (60%), content matches (30%), and category bonuses (20%)
 - **Rich Metadata**: Flexible metadata system for enhanced context
-- **JSON Storage**: Individual JSON files organized by category, named after memory titles
+- **Markdown Storage**: Individual markdown files with YAML frontmatter, named after memory titles
 - **Project-Specific**: Isolated memory storage per working directory
 
 ### 🔧 MCP Tools Available
 
-#### Project Management
-- `list_projects` - View all projects in a working directory
-- `create_project` - Create a new project in a working directory
-- `get_project` - Get detailed project information
-- `update_project` - Edit project name/description
-- `delete_project` - Delete project and all associated data
-
-#### Task Management (Unlimited Hierarchy v1.8.0)
+#### Task Management
 - `list_tasks` - View tasks in hierarchical tree format with unlimited depth visualization
 - `create_task` - Create tasks at any hierarchy level with `parentId` (supports unlimited nesting)
 - `get_task` - Get detailed task information including hierarchy relationships
 - `update_task` - Edit tasks, metadata, or move between hierarchy levels with `parentId`
 - `delete_task` - Delete task and all child tasks recursively
 - `move_task` - Dedicated tool for moving tasks within hierarchy structure
-
-#### Advanced Task Management (AI Agent Tools)
-- `parse_prd` - Parse Product Requirements Documents and automatically generate structured tasks
-- `get_next_task_recommendation` - Get intelligent task recommendations based on dependencies, priorities, and complexity
-- `analyze_task_complexity` - Analyze task complexity and suggest breaking down overly complex tasks
-- `infer_task_progress` - Analyze codebase to infer task completion status from implementation evidence
-- `research_task` - Guide AI agents to perform comprehensive web research with memory integration
-- `generate_research_queries` - Generate intelligent, targeted web search queries for task research
 
 #### Agent Memory Management
 - `create_memory` - Store new memories with title and detailed content
@@ -174,8 +156,8 @@ For the best user experience, install the [**Agentic Tools MCP Companion**](http
 3. Enjoy a beautiful GUI interface for all task and memory management
 
 **Benefits of using both together:**
-- 🎯 **Visual Task Management**: Rich forms with priority, complexity, status, tags, and time tracking
-- 🎨 **Enhanced UI**: Status emojis, priority badges, and visual indicators
+- 🎯 **Visual Task Management**: Rich forms with status, tags, and time tracking
+- 🎨 **Enhanced UI**: Status emojis and visual indicators
 - 🔄 **Real-time Sync**: Changes in VS Code instantly available to AI assistants
 - 📁 **Project Integration**: Seamlessly integrated with your workspace
 - 🤖 **AI Collaboration**: Human planning with AI execution for optimal productivity
@@ -195,39 +177,21 @@ npx -y @geanatz/cortex-mcp --claude
 
 ## Data Models
 
-### Project
+### Task (Unified Model)
 ```typescript
 {
-  id: string;           // Unique identifier
-  name: string;         // Project name
-  description: string;  // Project overview
-  createdAt: string;    // ISO timestamp
-  updatedAt: string;    // ISO timestamp
-}
-```
-
-### Task (Unified Model v1.8.0 - Unlimited Hierarchy)
-```typescript
-{
-  id: string;                    // Unique identifier
-  name: string;                  // Task name
+  id: string;                    // Unique identifier (folder name, e.g. "001-implement-auth")
   details: string;               // Enhanced description
-  projectId: string;             // Parent project reference
   completed: boolean;            // Completion status
   createdAt: string;             // ISO timestamp
   updatedAt: string;             // ISO timestamp
 
-  // Unlimited hierarchy fields (v1.8.0)
-  parentId?: string;             // Parent task ID for unlimited nesting (NEW)
-  level?: number;                // Computed hierarchy level (0, 1, 2, etc.) (NEW)
+  parentId?: string;             // Parent task ID for unlimited nesting
+  level?: number;                // Computed hierarchy level (0, 1, 2, etc.)
 
-  // Enhanced metadata fields (from v1.7.0)
   dependsOn?: string[];          // Task dependencies (IDs of prerequisite tasks)
-  priority?: number;             // Priority level (1-10, where 10 is highest)
-  complexity?: number;           // Complexity estimate (1-10, where 10 is most complex)
   status?: string;               // Enhanced status: 'pending' | 'in-progress' | 'blocked' | 'done'
   tags?: string[];               // Tags for categorization and filtering
-  estimatedHours?: number;       // Estimated time to complete (hours)
   actualHours?: number;          // Actual time spent (hours)
 }
 ```
@@ -247,41 +211,27 @@ npx -y @geanatz/cortex-mcp --claude
 
 ## Example Workflow
 
-1. **Create a Project**
-   ```
-   Use create_project with:
-   - workingDirectory="/path/to/your/project"
-   - name="Website Redesign"
-   - description="Complete overhaul of company website"
-   ```
-
-2. **Add Enhanced Tasks**
+1. **Add Tasks**
    ```
    Use create_task with:
    - workingDirectory="/path/to/your/project"
-   - name="Design mockups"
    - details="Create wireframes and high-fidelity designs"
-   - projectId="[project-id-from-step-1]"
-   - priority=8 (high priority)
-   - complexity=6 (above average complexity)
    - status="pending"
    - tags=["design", "ui", "mockups"]
-   - estimatedHours=16
    ```
 
-3. **Break Down Tasks**
+2. **Break Down Tasks**
    ```
-   Use create_subtask with:
+   Use create_task with:
    - workingDirectory="/path/to/your/project"
-   - name="Create wireframes"
    - details="Sketch basic layout structure"
-   - taskId="[task-id-from-step-2]"
+   - parentId="[task-id-from-step-1]"
    ```
 
-4. **Track Progress**
+3. **Track Progress**
    ```
-   Use update_task and update_subtask to mark items as completed
-   Use list_projects, list_tasks, and list_subtasks to view progress
+   Use update_task to mark items as completed
+   Use list_tasks to view progress
    (All with workingDirectory parameter)
    ```
 
@@ -324,30 +274,26 @@ npx -y @geanatz/cortex-mcp --claude
 - **Git-trackable**: All data can be committed alongside your project code
 - **Persistent**: All data persists between server restarts
 - **Atomic**: All operations are atomic to prevent data corruption
-- **JSON Storage**: Simple file-based storage for efficient memory organization
+- **Markdown Storage**: Simple file-based storage for efficient memory organization
 - **Backup-friendly**: Simple file-based storage for easy backup
 
-### Storage Structure (v3.0 Architecture)
+### Storage Structure
 ```
 your-project/
 ├── .cortex/
-│   ├── config.json         # Project configuration (v2.0+)
-│   │                       # { version: "3.0.0", projects: [...] }
 │   ├── tasks/              # Task management data for this project
-│   │   └── tasks.json      # Tasks only: { tasks: [...] }
-│   └── memories/           # JSON file storage for memories
-│       ├── preferences/    # User preferences category
-│       │   └── User_prefers_concise_technical_responses.json
-│       ├── technical/      # Technical information category
-│       │   └── React_TypeScript_project_with_strict_ESLint.json
-│       └── context/        # Context information category
-│           └── User_works_in_healthcare_needs_HIPAA_compliance.json
+│   │   ├── 001-design-mockups/
+│   │   │   └── task.json
+│   │   └── 002-create-wireframes/
+│   │       └── task.json
+│   └── memories/           # Markdown file storage for memories
+│       ├── user-prefers-concise-responses.md
+│       ├── project-uses-typescript.md
+│       └── api-key-location.md
 ├── src/
 ├── package.json
 └── README.md
 ```
-
-> **Note**: v3.0 uses a separated storage architecture. Projects are stored in `config.json` (configuration data) while tasks are stored in `tasks/tasks.json` (operational data). This follows MCP best practices for separation of concerns.
 
 ### Working Directory Parameter
 All MCP tools require a `workingDirectory` parameter that specifies:
@@ -370,7 +316,7 @@ All MCP tools require a `workingDirectory` parameter that specifies:
 
 - **Validation**: All inputs are validated with comprehensive error messages
 - **Directory Validation**: Ensures working directory exists and is accessible
-- **Referential Integrity**: Prevents orphaned tasks/subtasks with cascade deletes
+- **Referential Integrity**: Prevents orphaned tasks with cascade deletes
 - **Unique Names**: Enforces unique names within scope (project/task)
 - **Confirmation**: Destructive operations require explicit confirmation
 - **Graceful Degradation**: Detailed error messages for troubleshooting
@@ -393,16 +339,14 @@ src/
 ├── features/
 │   ├── task-management/
 │   │   ├── tools/           # MCP tool implementations
-│   │   │   ├── projects/    # Project CRUD operations
 │   │   │   ├── tasks/       # Task CRUD operations
-│   │   │   └── subtasks/    # Subtask CRUD operations
 │   │   ├── models/          # TypeScript interfaces
 │   │   └── storage/         # Data persistence layer
 │   └── agent-memories/
 │       ├── tools/           # Memory MCP tool implementations
 │       │   └── memories/    # Memory CRUD operations
 │       ├── models/          # Memory TypeScript interfaces
-│       └── storage/         # JSON file storage implementation
+│       └── storage/         # Markdown file storage implementation
 ├── server.ts            # MCP server configuration
 └── index.ts             # Entry point
 ```
@@ -430,22 +374,16 @@ src/
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and release notes.
 
 ### Current Version: 3.0.0
-- 🏗️ **Separated Storage Architecture**: Projects in `config.json`, tasks in `tasks/tasks.json`
-- 🚀 **Unified Task Model**: Single task interface supporting unlimited nesting depth
-- 🚀 **Unlimited Hierarchy**: Tasks → Subtasks → Sub-subtasks → infinite depth nesting
-- 🚀 **Enhanced Tree Display**: Hierarchical visualization with level indicators and unlimited depth
-- 🚀 **Hierarchy Tools**: `move_task` for unlimited depth management
-- ✅ **Rich Features at All Levels**: Every task gets priority, complexity, dependencies, tags, and time tracking
-- ✅ **Enhanced Task Management**: Rich metadata with dependencies, priority, complexity, status, tags, and time tracking
-- ✅ **Advanced AI Agent Tools**: PRD parsing, task recommendations, complexity analysis, progress inference, and research guidance
+- ✅ **Unified Task Model**: Single task interface supporting unlimited nesting depth
+- ✅ **Unlimited Hierarchy**: Tasks → Subtasks → deeper levels as needed
+- ✅ **Enhanced Tree Display**: Hierarchical visualization with level indicators and unlimited depth
+- ✅ **Hierarchy Tools**: `move_task` for unlimited depth management
 - ✅ **Intelligent Task Dependencies**: Dependency validation and workflow management across hierarchy
-- ✅ **Priority & Complexity System**: 1-10 scale prioritization and complexity estimation at every level
 - ✅ **Enhanced Status Workflow**: pending → in-progress → blocked → done status tracking
 - ✅ **Tag-Based Organization**: Flexible categorization and filtering system
 - ✅ **Time Tracking**: Estimated and actual hours for project planning
-- ✅ **Hybrid Research Integration**: Web research with memory caching for AI agents
 - ✅ **Complete task management system** with unlimited hierarchical organization
-- ✅ **Agent memories** with title/content architecture and JSON file storage
+- ✅ **Agent memories** with title/content architecture and markdown file storage
 - ✅ **Intelligent multi-field search** with relevance scoring
 - ✅ **Project-specific storage** with comprehensive MCP tools
 - ✅ **Global directory mode** with --claude flag for Claude Desktop
@@ -467,7 +405,7 @@ We're grateful to the open-source community and the following projects that make
 - **[Prettier](https://prettier.io/)** - Code formatting
 
 ### File Storage & Search
-- **JSON** - Simple, human-readable data format for memory storage
+- **Markdown** - Simple, human-readable data format for memory storage
 - **Text Search** - Efficient content-based search across memory files
 
 ### Special Thanks
@@ -497,8 +435,8 @@ npm start
 
 **Key Features:**
 - 🎯 **Visual Task Management**: Rich GUI with enhanced task metadata forms
-- 📝 **Enhanced Forms**: Priority, complexity, status, tags, and time tracking
-- 🎨 **Visual Indicators**: Status emojis, priority badges, and complexity indicators
+- 📝 **Enhanced Forms**: Status, tags, and time tracking
+- 🎨 **Visual Indicators**: Status emojis and visual indicators
 - 📊 **Rich Tooltips**: Complete task information on hover
 - 🔄 **Real-time Sync**: Instant synchronization with MCP server data
 - � **Responsive Design**: Adaptive forms that work on different screen sizes
