@@ -7,7 +7,7 @@ import { createUpdateTaskTool } from './update.js';
 
 /**
  * Tool for moving tasks within the hierarchy
- * Version 2.0: New tool for unlimited depth task management
+ * Version 5.0: Simplified - ID=folder name, no name field
  */
 function createMoveTaskTool(storage: Storage) {
   return {
@@ -69,12 +69,12 @@ function createMoveTaskTool(storage: Storage) {
         const ancestors = await storage.getTaskAncestors(movedTask.id);
 
         const oldPath = oldParent
-          ? `${oldParent.name} → ${task.name}`
-          : task.name;
+          ? `${oldParent.id} → ${task.id}`
+          : task.id;
 
         const newPath = newParent
-          ? `${ancestors.map(a => a.name).join(' → ')} → ${movedTask.name}`
-          : movedTask.name;
+          ? `${ancestors.map(a => a.id).join(' → ')} → ${movedTask.id}`
+          : movedTask.id;
 
         const levelIndicator = '  '.repeat(movedTask.level || 0) + '→';
 
@@ -83,13 +83,13 @@ function createMoveTaskTool(storage: Storage) {
             type: 'text' as const,
             text: `✅ **Task Moved Successfully!**
 
-**${levelIndicator} ${movedTask.name}** (ID: ${movedTask.id})
+**${levelIndicator} ${movedTask.id}**
 
 📍 **Movement Summary:**
 • From: ${oldPath}
 • To: ${newPath}
 • New Level: ${movedTask.level || 0} ${(movedTask.level || 0) === 0 ? '(Top-level)' : `(${movedTask.level} level${(movedTask.level || 0) > 1 ? 's' : ''} deep)`}
-• New Parent: ${newParent ? `${newParent.name} (${newParent.id})` : 'None (Top-level)'}
+• New Parent: ${newParent ? `${newParent.id}` : 'None (Top-level)'}
 
 🎯 **Next Steps:**
 • Use \`list_tasks\` with \`showHierarchy: true\` to see the updated structure
@@ -112,7 +112,7 @@ function createMoveTaskTool(storage: Storage) {
 
 /**
  * Create all task-related tools
- * Version 3.0: Unified task model with hierarchy tools
+ * Version 5.0: Simplified task model
  */
 export function createTaskTools(storage: Storage) {
   return {

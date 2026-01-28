@@ -2,8 +2,8 @@
  * Task Management Models
  * 
  * Central export point for all task management data models.
- * Version 4.0.0 - Simplified without projects
+ * Version 5.0.0 - Simplified without name, priority, complexity, and index.json
  */
 
 export * from './task.js';
-export * from './config.js';
+export { CURRENT_STORAGE_VERSION } from './config.js';

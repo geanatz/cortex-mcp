@@ -1,15 +1,16 @@
 /**
  * Task data model for the task management system
- * Version 2.0: Unified model supporting unlimited nesting depth
+ * Version 5.0.0: Simplified model
+ * - ID = folder name (e.g., '001-implement-auth')
+ * - No name field (use id for display)
+ * - No priority or complexity fields
  */
 export interface Task {
-  /** Unique identifier for the task */
+  /** Unique identifier for the task (same as folder name, e.g., '001-implement-auth') */
   id: string;
-  /** Task name */
-  name: string;
   /** Enhanced task description */
   details: string;
-  /** Reference to parent task (null for top-level tasks) */
+  /** Reference to parent task ID (null for top-level tasks) */
   parentId?: string;
   /** Task completion status */
   completed: boolean;
@@ -19,10 +20,6 @@ export interface Task {
   updatedAt: string;
   /** Task dependencies - IDs of tasks that must be completed before this task */
   dependsOn?: string[];
-  /** Task priority level (1-10, where 10 is highest priority) */
-  priority?: number;
-  /** Estimated complexity/effort (1-10, where 10 is most complex) */
-  complexity?: number;
   /** Task status beyond just completed (pending, in-progress, blocked, done) */
   status?: 'pending' | 'in-progress' | 'blocked' | 'done';
   /** Tags for categorization and filtering */
@@ -39,18 +36,12 @@ export interface Task {
  * Input data for creating a new task
  */
 export interface CreateTaskInput {
-  /** Task name */
-  name: string;
-  /** Enhanced task description */
+  /** Enhanced task description (used to generate folder name/ID) */
   details: string;
-  /** Reference to parent task (optional, null for top-level tasks) */
+  /** Reference to parent task ID (optional, null for top-level tasks) */
   parentId?: string;
   /** Task dependencies - IDs of tasks that must be completed before this task */
   dependsOn?: string[];
-  /** Task priority level (1-10, where 10 is highest priority) */
-  priority?: number;
-  /** Estimated complexity/effort (1-10, where 10 is most complex) */
-  complexity?: number;
   /** Task status (defaults to 'pending') */
   status?: 'pending' | 'in-progress' | 'blocked' | 'done';
   /** Tags for categorization and filtering */
@@ -63,8 +54,6 @@ export interface CreateTaskInput {
  * Input data for updating an existing task
  */
 export interface UpdateTaskInput {
-  /** Task name (optional) */
-  name?: string;
   /** Enhanced task description (optional) */
   details?: string;
   /** Reference to parent task (optional) */
@@ -73,10 +62,6 @@ export interface UpdateTaskInput {
   completed?: boolean;
   /** Task dependencies - IDs of tasks that must be completed before this task */
   dependsOn?: string[];
-  /** Task priority level (1-10, where 10 is highest priority) */
-  priority?: number;
-  /** Estimated complexity/effort (1-10, where 10 is most complex) */
-  complexity?: number;
   /** Task status */
   status?: 'pending' | 'in-progress' | 'blocked' | 'done';
   /** Tags for categorization and filtering */
@@ -101,7 +86,6 @@ export interface TaskHierarchy {
  */
 export interface TaskTreeNode {
   id: string;
-  name: string;
   parentId?: string;
   children: string[];
   depth: number;

@@ -3,6 +3,7 @@ import { Storage } from '../../storage/storage.js';
 
 /**
  * Get task details by ID
+ * Version 5.0: Simplified - ID=folder name, no name field
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for getting task details
@@ -10,7 +11,7 @@ import { Storage } from '../../storage/storage.js';
 export function createGetTaskTool(storage: Storage) {
   return {
     name: 'get_task',
-    description: 'Get detailed information about a specific task by its ID',
+    description: 'Get detailed information about a specific task by its ID (folder name)',
     inputSchema: {
       id: z.string()
     },
@@ -51,7 +52,7 @@ export function createGetTaskTool(storage: Storage) {
         return {
           content: [{
             type: 'text' as const,
-            text: `**${task.name}** (ID: ${task.id})
+            text: `**${task.id}**
 
 **Status:** ${status}
 **Details:** ${task.details}

@@ -3,8 +3,8 @@ import { Storage } from '../../storage/storage.js';
 import { Task } from '../../models/task.js';
 
 /**
- * List tasks with hierarchical display, optionally filtered by project and parent
- * Version 2.0: Updated for unified task model supporting unlimited hierarchy
+ * List tasks with hierarchical display, optionally filtered by parent
+ * Version 5.0: Simplified - ID=folder name, no name/priority/complexity fields
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for listing tasks
@@ -45,7 +45,7 @@ export function createListTasksTool(storage: Storage) {
 
           if (hierarchy.length === 0) {
             const scopeDescription = parentTask
-              ? `under parent task "${parentTask.name}"`
+              ? `under parent task "${parentTask.id}"`
               : `at the top level`;
 
             return {
@@ -67,14 +67,11 @@ export function createListTasksTool(storage: Storage) {
 
               const indent = '  '.repeat(baseLevel);
               const icon = task.completed ? '✅' : '⏳';
-              const priorityIcon = task.priority && task.priority >= 8 ? '🔥' :
-                                 task.priority && task.priority >= 6 ? '⚡' : '';
-              const complexityIcon = task.complexity && task.complexity >= 8 ? '🧩' : '';
               const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
               const timeText = task.estimatedHours ? ` (${task.estimatedHours}h)` : '';
 
-              let taskLine = `${indent}${icon} **${task.name}** ${priorityIcon}${complexityIcon}${statusText}${timeText}\n`;
-              taskLine += `${indent}   ID: ${task.id} | Level: ${task.level || 0}\n`;
+              let taskLine = `${indent}${icon} **${task.id}**${statusText}${timeText}\n`;
+              taskLine += `${indent}   Level: ${task.level || 0}\n`;
               taskLine += `${indent}   ${task.details}\n`;
 
               if (task.tags && task.tags.length > 0) {
@@ -102,7 +99,7 @@ export function createListTasksTool(storage: Storage) {
           const completedTasks = countCompletedTasksInHierarchy(hierarchy);
 
           const scopeInfo = parentTask
-            ? `Showing hierarchy under "${parentTask.name}"`
+            ? `Showing hierarchy under "${parentTask.id}"`
             : `Showing full task hierarchy`;
 
           return {
@@ -127,7 +124,7 @@ ${hierarchyText}
 
           if (tasks.length === 0) {
             const scopeDescription = parentTask
-              ? `under parent task "${parentTask.name}"`
+              ? `under parent task "${parentTask.id}"`
               : `at the top level`;
 
             return {
@@ -142,14 +139,11 @@ ${hierarchyText}
 
           const taskList = filteredTasks.map(task => {
             const icon = task.completed ? '✅' : '⏳';
-            const priorityIcon = task.priority && task.priority >= 8 ? '🔥' :
-                               task.priority && task.priority >= 6 ? '⚡' : '';
-            const complexityIcon = task.complexity && task.complexity >= 8 ? '🧩' : '';
             const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
             const timeText = task.estimatedHours ? ` (${task.estimatedHours}h)` : '';
 
-            return `${icon} **${task.name}** ${priorityIcon}${complexityIcon}${statusText}${timeText}
-   ID: ${task.id} | Level: ${task.level || 0}
+            return `${icon} **${task.id}**${statusText}${timeText}
+   Level: ${task.level || 0}
    ${task.details}
    ${task.tags && task.tags.length > 0 ? `Tags: ${task.tags.join(', ')}` : ''}
    Created: ${new Date(task.createdAt).toLocaleString()}`;
@@ -157,7 +151,7 @@ ${hierarchyText}
 
           const completedCount = filteredTasks.filter(t => t.completed).length;
           const scopeDescription = parentTask
-            ? `under "${parentTask.name}"`
+            ? `under "${parentTask.id}"`
             : `at top level`;
 
           return {

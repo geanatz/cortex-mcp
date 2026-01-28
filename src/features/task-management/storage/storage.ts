@@ -1,16 +1,16 @@
 import { Task, TaskHierarchy } from '../models/task.js';
-import { TaskIndex, TaskIndexEntry, CURRENT_STORAGE_VERSION } from '../models/config.js';
+import { CURRENT_STORAGE_VERSION } from '../models/config.js';
 
 // Re-export config types for convenience
-export { TaskIndex, TaskIndexEntry, CURRENT_STORAGE_VERSION };
+export { CURRENT_STORAGE_VERSION };
 
 /**
  * Storage interface for the task management system
  * 
- * Version 4.0.0: Simplified architecture without projects
- * - Tasks stored in .cortex/tasks/{number}-{name}/task.json
- * - Index file in .cortex/tasks/index.json for quick lookups
- * - No project concept - tasks are standalone entities
+ * Version 5.0.0: Simplified architecture without index.json
+ * - Tasks stored in .cortex/tasks/{number}-{slug}/task.json
+ * - Task ID = folder name (e.g., '001-implement-auth')
+ * - No index file - tasks discovered by scanning folders
  * - Supports unlimited task hierarchy via parentId
  */
 export interface Storage {
@@ -32,9 +32,6 @@ export interface Storage {
   getTaskChildren(taskId: string): Promise<Task[]>;
   getTaskAncestors(taskId: string): Promise<Task[]>;
   moveTask(taskId: string, newParentId?: string): Promise<Task | null>;
-
-  // Index operations
-  getTaskIndex(): Promise<TaskIndex>;
 
   // Configuration info
   getVersion(): string;

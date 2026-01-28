@@ -3,7 +3,7 @@ import { Storage } from '../../storage/storage.js';
 
 /**
  * Update an existing task including hierarchy changes
- * Version 2.0: Updated for unified task model supporting unlimited hierarchy
+ * Version 5.0: Simplified - ID=folder name, no name/priority/complexity fields
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for updating tasks
@@ -11,30 +11,24 @@ import { Storage } from '../../storage/storage.js';
 export function createUpdateTaskTool(storage: Storage) {
   return {
     name: 'update_task',
-    description: 'Update task properties including name, details, parent relationship (parentId), completion status, dependencies, priority, complexity, status, tags, and time estimates. Use parentId to move tasks within the hierarchy.',
+    description: 'Update task properties including details, parent relationship (parentId), completion status, dependencies, status, tags, and time estimates. Use parentId to move tasks within the hierarchy.',
     inputSchema: {
       id: z.string(),
-      name: z.string().optional(),
       details: z.string().optional(),
       parentId: z.string().optional(),
       completed: z.boolean().optional(),
       dependsOn: z.array(z.string()).optional(),
-      priority: z.number().min(1).max(10).optional(),
-      complexity: z.number().min(1).max(10).optional(),
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional(),
       tags: z.array(z.string()).optional(),
       estimatedHours: z.number().min(0).optional(),
       actualHours: z.number().min(0).optional()
     },
-    handler: async ({ id, name, details, parentId, completed, dependsOn, priority, complexity, status, tags, estimatedHours, actualHours }: {
+    handler: async ({ id, details, parentId, completed, dependsOn, status, tags, estimatedHours, actualHours }: {
       id: string;
-      name?: string;
       details?: string;
       parentId?: string;
       completed?: boolean;
       dependsOn?: string[];
-      priority?: number;
-      complexity?: number;
       status?: 'pending' | 'in-progress' | 'blocked' | 'done';
       tags?: string[];
       estimatedHours?: number;
@@ -47,26 +41,6 @@ export function createUpdateTaskTool(storage: Storage) {
             content: [{
               type: 'text' as const,
               text: 'Error: Task ID is required.'
-            }],
-            isError: true
-          };
-        }
-
-        if (name !== undefined && (!name || name.trim().length === 0)) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Task name must not be empty.'
-            }],
-            isError: true
-          };
-        }
-
-        if (name !== undefined && name.trim().length > 100) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Task name must be 100 characters or less.'
             }],
             isError: true
           };
@@ -92,10 +66,9 @@ export function createUpdateTaskTool(storage: Storage) {
           };
         }
 
-        if (name === undefined && details === undefined && parentId === undefined && completed === undefined &&
-            dependsOn === undefined && priority === undefined && complexity === undefined &&
-            status === undefined && tags === undefined && estimatedHours === undefined &&
-            actualHours === undefined) {
+        if (details === undefined && parentId === undefined && completed === undefined &&
+            dependsOn === undefined && status === undefined && tags === undefined && 
+            estimatedHours === undefined && actualHours === undefined) {
           return {
             content: [{
               type: 'text' as const,
@@ -142,13 +115,7 @@ export function createUpdateTaskTool(storage: Storage) {
               };
             }
 
-            // Ensure parent is not a child of the current task (circular reference check)
-            // This is handled by moveTask in storage, but good to check here or rely on storage logic?
-            // Storage logic is handled in storage.ts, here we just need to pass it.
-            // But we already fetched newParentTask to validate existence.
-
             // Check for circular dependencies (would the new parent be a descendant?)
-            const children = await storage.getTaskChildren(id);
             const allDescendants = await getAllDescendants(storage, id);
             if (allDescendants.includes(parentId)) {
               return {
@@ -159,28 +126,6 @@ export function createUpdateTaskTool(storage: Storage) {
                 isError: true
               };
             }
-          }
-        }
-
-        // Check for name uniqueness within the same parent scope if name is being updated
-        if (name && name.toLowerCase() !== existingTask.name.toLowerCase()) {
-          const effectiveParentId = parentId !== undefined ? parentId : existingTask.parentId;
-          const siblingTasks = await storage.getTasks(effectiveParentId);
-          const nameExists = siblingTasks.some(t => t.id !== id && t.name.toLowerCase() === name.toLowerCase());
-
-          if (nameExists) {
-            const scopeDescription = newParentTask
-              ? `under parent task "${newParentTask.name}"`
-              : effectiveParentId
-                ? 'in the current parent scope'
-                : 'at the top level of this project';
-            return {
-              content: [{
-                type: 'text' as const,
-                text: `Error: A task with the name "${name}" already exists ${scopeDescription}. Please choose a different name.`
-              }],
-              isError: true
-            };
           }
         }
 
@@ -213,10 +158,6 @@ export function createUpdateTaskTool(storage: Storage) {
           updatedAt: new Date().toISOString()
         };
 
-        if (name !== undefined) {
-          updates.name = name.trim();
-        }
-
         if (details !== undefined) {
           updates.details = details.trim();
         }
@@ -231,14 +172,6 @@ export function createUpdateTaskTool(storage: Storage) {
 
         if (dependsOn !== undefined) {
           updates.dependsOn = dependsOn;
-        }
-
-        if (priority !== undefined) {
-          updates.priority = priority;
-        }
-
-        if (complexity !== undefined) {
-          updates.complexity = complexity;
         }
 
         if (status !== undefined) {
@@ -274,13 +207,10 @@ export function createUpdateTaskTool(storage: Storage) {
         const taskLevel = updatedTask.level || 0;
 
         const changedFields = [];
-        if (name !== undefined) changedFields.push('name');
         if (details !== undefined) changedFields.push('details');
         if (parentId !== undefined) changedFields.push('parent relationship');
         if (completed !== undefined) changedFields.push('completion status');
         if (dependsOn !== undefined) changedFields.push('dependencies');
-        if (priority !== undefined) changedFields.push('priority');
-        if (complexity !== undefined) changedFields.push('complexity');
         if (status !== undefined) changedFields.push('status');
         if (tags !== undefined) changedFields.push('tags');
         if (estimatedHours !== undefined) changedFields.push('estimated hours');
@@ -293,9 +223,9 @@ export function createUpdateTaskTool(storage: Storage) {
         let hierarchyPath = '';
         if (currentParent) {
           const ancestors = await storage.getTaskAncestors(updatedTask.id);
-          hierarchyPath = `${ancestors.map(a => a.name).join(' → ')} → ${updatedTask.name}`;
+          hierarchyPath = `${ancestors.map(a => a.id).join(' → ')} → ${updatedTask.id}`;
         } else {
-          hierarchyPath = updatedTask.name;
+          hierarchyPath = updatedTask.id;
         }
 
         return {
@@ -303,14 +233,12 @@ export function createUpdateTaskTool(storage: Storage) {
             type: 'text' as const,
             text: `✅ Task updated successfully!
 
-**${levelIndicator} ${updatedTask.name}** (ID: ${updatedTask.id})
-${currentParent ? `Parent: ${currentParent.name} (${currentParent.id})` : 'Top-level task'}
+**${levelIndicator} ${updatedTask.id}**
+${currentParent ? `Parent: ${currentParent.id}` : 'Top-level task'}
 Level: ${taskLevel} ${taskLevel === 0 ? '(Top-level)' : `(${taskLevel} level${taskLevel > 1 ? 's' : ''} deep)`}
 Path: ${hierarchyPath}
 
 📋 **Task Properties:**
-• Priority: ${updatedTask.priority || 'Not set'}/10
-• Complexity: ${updatedTask.complexity || 'Not set'}/10
 • Status: ${taskStatus}
 • Completed: ${updatedTask.completed ? 'Yes' : 'No'}
 • Tags: ${updatedTask.tags?.join(', ') || 'None'}

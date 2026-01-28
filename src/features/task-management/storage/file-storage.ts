@@ -2,36 +2,26 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { Storage, CURRENT_STORAGE_VERSION } from './storage.js';
 import { Task, TaskHierarchy } from '../models/task.js';
-import {
-  TaskIndex,
-  TaskIndexEntry,
-  createEmptyTaskIndex
-} from '../models/config.js';
 
 /**
  * File-based storage implementation using individual task folders
  * 
- * Version 4.0.0: New folder-based architecture
+ * Version 5.0.0: Simplified folder-based architecture without index.json
  * 
  * Storage Structure:
- * - .cortex/tasks/index.json - Task index for quick lookups
- * - .cortex/tasks/{number}-{name}/task.json - Individual task files
+ * - .cortex/tasks/{number}-{slug}/task.json - Individual task files
  * 
  * Features:
  * - Each task has its own folder with sequential numbering (001-, 002-, etc.)
- * - Index file maintains task registry for fast listing
+ * - Task ID = folder name (e.g., '001-implement-auth')
+ * - No index file - tasks discovered by scanning folders
  * - Atomic-ish file writes using temp files
  * - Unlimited task hierarchy via parentId
- * - No project concept - simplified architecture
  */
 export class FileStorage implements Storage {
   private workingDirectory: string;
   private cortexDir: string;
   private tasksDir: string;
-  private indexFile: string;
-  
-  // In-memory index cache
-  private taskIndex: TaskIndex;
   
   // Initialization state
   private initialized: boolean = false;
@@ -40,14 +30,10 @@ export class FileStorage implements Storage {
     this.workingDirectory = workingDirectory;
     this.cortexDir = join(workingDirectory, '.cortex');
     this.tasksDir = join(this.cortexDir, 'tasks');
-    this.indexFile = join(this.tasksDir, 'index.json');
-    
-    // Initialize with empty index
-    this.taskIndex = createEmptyTaskIndex();
   }
 
   /**
-   * Initialize storage by validating working directory and loading index
+   * Initialize storage by validating working directory and ensuring directories exist
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
@@ -65,19 +51,11 @@ export class FileStorage implements Storage {
     await fs.mkdir(this.cortexDir, { recursive: true });
     await fs.mkdir(this.tasksDir, { recursive: true });
 
-    // Load or create index
-    const indexExists = await this.fileExists(this.indexFile);
-    if (indexExists) {
-      await this.loadIndex();
-    } else {
-      await this.saveIndex();
-    }
-
     this.initialized = true;
   }
 
   /**
-   * Check if a file exists
+   * Check if a file or directory exists
    */
   private async fileExists(filePath: string): Promise<boolean> {
     try {
@@ -89,49 +67,8 @@ export class FileStorage implements Storage {
   }
 
   /**
-   * Load task index from index.json
-   */
-  private async loadIndex(): Promise<void> {
-    try {
-      const content = await fs.readFile(this.indexFile, 'utf-8');
-      const data = JSON.parse(content);
-      
-      this.taskIndex = {
-        version: data.version || CURRENT_STORAGE_VERSION,
-        nextNumber: data.nextNumber || 1,
-        tasks: data.tasks || [],
-        lastModified: data.lastModified || new Date().toISOString()
-      };
-    } catch (error) {
-      console.warn('[cortex-mcp] Could not load index, creating new one:', error);
-      this.taskIndex = createEmptyTaskIndex();
-      await this.saveIndex();
-    }
-  }
-
-  /**
-   * Save task index to index.json with atomic-ish write
-   */
-  private async saveIndex(): Promise<void> {
-    this.taskIndex.lastModified = new Date().toISOString();
-    const content = JSON.stringify(this.taskIndex, null, 2);
-    
-    // Write to temp file first, then rename (atomic on POSIX)
-    const tempFile = this.indexFile + '.tmp';
-    try {
-      await fs.writeFile(tempFile, content, 'utf-8');
-      await fs.rename(tempFile, this.indexFile);
-    } catch (error) {
-      // Cleanup temp file on error
-      try {
-        await fs.unlink(tempFile);
-      } catch { /* ignore */ }
-      throw error;
-    }
-  }
-
-  /**
    * Sanitize a string for safe filesystem usage
+   * Used to generate folder name slugs from task details
    */
   private sanitizeName(input: string): string {
     // Remove or replace unsafe characters
@@ -145,6 +82,8 @@ export class FileStorage implements Storage {
     // Limit length to 50 characters
     if (sanitized.length > 50) {
       sanitized = sanitized.substring(0, 50);
+      // Don't end on a dash
+      sanitized = sanitized.replace(/-+$/, '');
     }
 
     // Ensure it's not empty
@@ -156,36 +95,53 @@ export class FileStorage implements Storage {
   }
 
   /**
-   * Generate folder name for a task
-   * Format: {3-digit-number}-{sanitized-name}
+   * Get the next sequential number by scanning existing task folders
    */
-  private generateFolderName(name: string): string {
-    const number = this.taskIndex.nextNumber;
+  private async getNextNumber(): Promise<number> {
+    try {
+      const entries = await fs.readdir(this.tasksDir, { withFileTypes: true });
+      const taskFolders = entries
+        .filter(e => e.isDirectory() && /^\d{3}-/.test(e.name))
+        .map(e => parseInt(e.name.slice(0, 3), 10))
+        .filter(n => !isNaN(n));
+
+      if (taskFolders.length === 0) return 1;
+      return Math.max(...taskFolders) + 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  /**
+   * Generate task ID (folder name) from details
+   * Format: {3-digit-number}-{sanitized-slug}
+   */
+  private generateTaskId(details: string, number: number): string {
     const paddedNumber = number.toString().padStart(3, '0');
-    const sanitizedName = this.sanitizeName(name);
-    return `${paddedNumber}-${sanitizedName}`;
+    const sanitizedSlug = this.sanitizeName(details);
+    return `${paddedNumber}-${sanitizedSlug}`;
   }
 
   /**
-   * Get task folder path by folder name
+   * Get task folder path by task ID (folder name)
    */
-  private getTaskFolderPath(folderName: string): string {
-    return join(this.tasksDir, folderName);
+  private getTaskFolderPath(taskId: string): string {
+    return join(this.tasksDir, taskId);
   }
 
   /**
-   * Get task file path by folder name
+   * Get task file path by task ID (folder name)
    */
-  private getTaskFilePath(folderName: string): string {
-    return join(this.getTaskFolderPath(folderName), 'task.json');
+  private getTaskFilePath(taskId: string): string {
+    return join(this.getTaskFolderPath(taskId), 'task.json');
   }
 
   /**
    * Load a task from its folder
    */
-  private async loadTaskFromFolder(folderName: string): Promise<Task | null> {
+  private async loadTaskFromFolder(taskId: string): Promise<Task | null> {
     try {
-      const filePath = this.getTaskFilePath(folderName);
+      const filePath = this.getTaskFilePath(taskId);
       const content = await fs.readFile(filePath, 'utf-8');
       return JSON.parse(content) as Task;
     } catch (error) {
@@ -196,16 +152,16 @@ export class FileStorage implements Storage {
   /**
    * Save a task to its folder with atomic-ish write
    */
-  private async saveTaskToFolder(folderName: string, task: Task): Promise<void> {
-    const folderPath = this.getTaskFolderPath(folderName);
-    const filePath = this.getTaskFilePath(folderName);
+  private async saveTaskToFolder(taskId: string, task: Task): Promise<void> {
+    const folderPath = this.getTaskFolderPath(taskId);
+    const filePath = this.getTaskFilePath(taskId);
     
     // Ensure folder exists
     await fs.mkdir(folderPath, { recursive: true });
     
     const content = JSON.stringify(task, null, 2);
     
-    // Write to temp file first, then rename
+    // Write to temp file first, then rename (atomic on POSIX)
     const tempFile = filePath + '.tmp';
     try {
       await fs.writeFile(tempFile, content, 'utf-8');
@@ -221,12 +177,27 @@ export class FileStorage implements Storage {
   /**
    * Delete a task folder
    */
-  private async deleteTaskFolder(folderName: string): Promise<void> {
-    const folderPath = this.getTaskFolderPath(folderName);
+  private async deleteTaskFolder(taskId: string): Promise<void> {
+    const folderPath = this.getTaskFolderPath(taskId);
     try {
       await fs.rm(folderPath, { recursive: true, force: true });
     } catch (error) {
       // Ignore if folder doesn't exist
+    }
+  }
+
+  /**
+   * Get all task folder names from the tasks directory
+   */
+  private async getAllTaskFolders(): Promise<string[]> {
+    try {
+      const entries = await fs.readdir(this.tasksDir, { withFileTypes: true });
+      return entries
+        .filter(e => e.isDirectory() && /^\d{3}-/.test(e.name))
+        .map(e => e.name)
+        .sort(); // Sort by folder name (which includes number prefix)
+    } catch {
+      return [];
     }
   }
 
@@ -257,24 +228,18 @@ export class FileStorage implements Storage {
    * Get current storage version
    */
   getVersion(): string {
-    return this.taskIndex.version;
-  }
-
-  /**
-   * Get task index
-   */
-  async getTaskIndex(): Promise<TaskIndex> {
-    return { ...this.taskIndex };
+    return CURRENT_STORAGE_VERSION;
   }
 
   // ==================== Task Operations ====================
 
   async getTasks(parentId?: string): Promise<Task[]> {
+    const folders = await this.getAllTaskFolders();
     const tasks: Task[] = [];
     
     // Load all tasks from their folders
-    for (const entry of this.taskIndex.tasks) {
-      const task = await this.loadTaskFromFolder(entry.folderName);
+    for (const folder of folders) {
+      const task = await this.loadTaskFromFolder(folder);
       if (task) {
         tasks.push(task);
       }
@@ -285,7 +250,7 @@ export class FileStorage implements Storage {
       return tasks.filter(t => t.parentId === parentId);
     }
 
-    // Calculate levels
+    // Calculate levels for all tasks
     for (const task of tasks) {
       task.level = this.calculateTaskLevel(task, tasks);
     }
@@ -294,10 +259,8 @@ export class FileStorage implements Storage {
   }
 
   async getTask(id: string): Promise<Task | null> {
-    const entry = this.taskIndex.tasks.find(t => t.id === id);
-    if (!entry) return null;
-
-    const task = await this.loadTaskFromFolder(entry.folderName);
+    // ID is the folder name - load directly
+    const task = await this.loadTaskFromFolder(id);
     if (task) {
       const allTasks = await this.getTasks();
       task.level = this.calculateTaskLevel(task, allTasks);
@@ -314,26 +277,15 @@ export class FileStorage implements Storage {
       }
     }
 
-    // Generate folder name
-    const folderName = this.generateFolderName(task.name);
+    // Get next number and generate task ID
+    const nextNumber = await this.getNextNumber();
+    const taskId = this.generateTaskId(task.details, nextNumber);
+    
+    // Set the ID to the folder name
+    task.id = taskId;
     
     // Save task to folder
-    await this.saveTaskToFolder(folderName, task);
-
-    // Add to index
-    const indexEntry: TaskIndexEntry = {
-      id: task.id,
-      folderName,
-      name: task.name,
-      parentId: task.parentId,
-      status: task.status || 'pending',
-      completed: task.completed,
-      createdAt: task.createdAt,
-      updatedAt: task.updatedAt
-    };
-    this.taskIndex.tasks.push(indexEntry);
-    this.taskIndex.nextNumber++;
-    await this.saveIndex();
+    await this.saveTaskToFolder(taskId, task);
 
     // Calculate level
     const allTasks = await this.getTasks();
@@ -343,11 +295,7 @@ export class FileStorage implements Storage {
   }
 
   async updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
-    const entryIndex = this.taskIndex.tasks.findIndex(t => t.id === id);
-    if (entryIndex === -1) return null;
-
-    const entry = this.taskIndex.tasks[entryIndex];
-    const task = await this.loadTaskFromFolder(entry.folderName);
+    const task = await this.loadTaskFromFolder(id);
     if (!task) return null;
 
     // If updating parentId, validate the new parent
@@ -362,26 +310,16 @@ export class FileStorage implements Storage {
       }
     }
 
-    // Merge updates
+    // Merge updates (don't allow changing ID)
     const updatedTask: Task = {
       ...task,
       ...updates,
+      id: task.id, // Preserve original ID
       updatedAt: new Date().toISOString()
     };
 
     // Save updated task
-    await this.saveTaskToFolder(entry.folderName, updatedTask);
-
-    // Update index entry
-    this.taskIndex.tasks[entryIndex] = {
-      ...entry,
-      name: updatedTask.name,
-      parentId: updatedTask.parentId,
-      status: updatedTask.status || 'pending',
-      completed: updatedTask.completed,
-      updatedAt: updatedTask.updatedAt
-    };
-    await this.saveIndex();
+    await this.saveTaskToFolder(id, updatedTask);
 
     // Calculate level
     const allTasks = await this.getTasks();
@@ -391,44 +329,34 @@ export class FileStorage implements Storage {
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    const entryIndex = this.taskIndex.tasks.findIndex(t => t.id === id);
-    if (entryIndex === -1) return false;
-
-    const entry = this.taskIndex.tasks[entryIndex];
+    const task = await this.loadTaskFromFolder(id);
+    if (!task) return false;
 
     // Delete all child tasks recursively first
     await this.deleteTasksByParent(id);
 
     // Delete the task folder
-    await this.deleteTaskFolder(entry.folderName);
-
-    // Remove from index
-    this.taskIndex.tasks.splice(entryIndex, 1);
-    await this.saveIndex();
+    await this.deleteTaskFolder(id);
 
     return true;
   }
 
   async deleteTasksByParent(parentId: string): Promise<number> {
-    const childEntries = this.taskIndex.tasks.filter(t => t.parentId === parentId);
+    const allTasks = await this.getTasks();
+    const childTasks = allTasks.filter(t => t.parentId === parentId);
     let deletedCount = 0;
 
     // Recursively delete children first
-    for (const child of childEntries) {
+    for (const child of childTasks) {
       deletedCount += await this.deleteTasksByParent(child.id);
     }
 
     // Delete direct children
-    for (const child of childEntries) {
-      await this.deleteTaskFolder(child.folderName);
-      const index = this.taskIndex.tasks.findIndex(t => t.id === child.id);
-      if (index !== -1) {
-        this.taskIndex.tasks.splice(index, 1);
-        deletedCount++;
-      }
+    for (const child of childTasks) {
+      await this.deleteTaskFolder(child.id);
+      deletedCount++;
     }
 
-    await this.saveIndex();
     return deletedCount;
   }
 

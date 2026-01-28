@@ -1,11 +1,10 @@
 import { z } from 'zod';
-import { randomUUID } from 'crypto';
 import { Storage } from '../../storage/storage.js';
 import { Task } from '../../models/task.js';
 
 /**
- * Create a new task within a project with unlimited nesting depth
- * Version 2.0: Updated for unified task model supporting unlimited hierarchy
+ * Create a new task with unlimited nesting depth
+ * Version 5.0: Simplified - ID=folder name, no name/priority/complexity fields
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for creating tasks
@@ -13,51 +12,25 @@ import { Task } from '../../models/task.js';
 export function createCreateTaskTool(storage: Storage) {
   return {
     name: 'create_task',
-    description: 'Create a new task within a specific project. Supports unlimited nesting depth - set parentId to create subtasks, sub-subtasks, etc. Leave parentId empty for top-level tasks.',
+    description: 'Create a new task. The task ID will be automatically generated from the details (e.g., "001-implement-auth"). Supports unlimited nesting depth - set parentId to create subtasks.',
     inputSchema: {
-      name: z.string(),
       details: z.string(),
       parentId: z.string().optional(),
       dependsOn: z.array(z.string()).optional(),
-      priority: z.number().min(1).max(10).optional(),
-      complexity: z.number().min(1).max(10).optional(),
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional(),
       tags: z.array(z.string()).optional(),
       estimatedHours: z.number().min(0).optional()
     },
-    handler: async ({ name, details, parentId, dependsOn, priority, complexity, status, tags, estimatedHours }: {
-      name: string;
+    handler: async ({ details, parentId, dependsOn, status, tags, estimatedHours }: {
       details: string;
       parentId?: string;
       dependsOn?: string[];
-      priority?: number;
-      complexity?: number;
       status?: 'pending' | 'in-progress' | 'blocked' | 'done';
       tags?: string[];
       estimatedHours?: number;
     }) => {
       try {
         // Validate inputs
-        if (!name || name.trim().length === 0) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Task name is required.'
-            }],
-            isError: true
-          };
-        }
-
-        if (name.trim().length > 100) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: 'Error: Task name must be 100 characters or less.'
-            }],
-            isError: true
-          };
-        }
-
         if (!details || details.trim().length === 0) {
           return {
             content: [{
@@ -97,23 +70,6 @@ export function createCreateTaskTool(storage: Storage) {
           taskLevel = (parentTask.level || 0) + 1;
         }
 
-        // Check for duplicate task names within the same parent scope
-        const siblingTasks = await storage.getTasks(parentId);
-        const nameExists = siblingTasks.some(t => t.name.toLowerCase() === name.toLowerCase());
-
-        if (nameExists) {
-          const scopeDescription = parentTask
-            ? `under parent task "${parentTask.name}"`
-            : `at the top level`;
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: A task with the name "${name}" already exists ${scopeDescription}. Please choose a different name.`
-            }],
-            isError: true
-          };
-        }
-
         // Validate dependencies exist if provided
         if (dependsOn && dependsOn.length > 0) {
           for (const depId of dependsOn) {
@@ -132,16 +88,13 @@ export function createCreateTaskTool(storage: Storage) {
 
         const now = new Date().toISOString();
         const task: Task = {
-          id: randomUUID(),
-          name: name.trim(),
+          id: '', // Will be set by storage.createTask based on details
           details: details.trim(),
           parentId: parentId?.trim() || undefined,
           completed: false,
           createdAt: now,
           updatedAt: now,
           dependsOn: dependsOn || [],
-          priority: priority || 5,
-          complexity: complexity,
           status: status || 'pending',
           tags: tags || [],
           estimatedHours: estimatedHours,
@@ -151,8 +104,8 @@ export function createCreateTaskTool(storage: Storage) {
         const createdTask = await storage.createTask(task);
 
         const hierarchyPath = parentTask
-          ? `${parentTask.name} → ${createdTask.name}`
-          : createdTask.name;
+          ? `${parentTask.id} → ${createdTask.id}`
+          : createdTask.id;
 
         const levelIndicator = '  '.repeat(taskLevel) + '→';
 
@@ -161,15 +114,13 @@ export function createCreateTaskTool(storage: Storage) {
             type: 'text' as const,
             text: `✅ Task created successfully!
 
-**${levelIndicator} ${createdTask.name}** (ID: ${createdTask.id})
-${parentTask ? `Parent: ${parentTask.name} (${parentTask.id})` : 'Top-level task'}
+**${levelIndicator} ${createdTask.id}**
+${parentTask ? `Parent: ${parentTask.id}` : 'Top-level task'}
 Level: ${taskLevel} ${taskLevel === 0 ? '(Top-level)' : `(${taskLevel} level${taskLevel > 1 ? 's' : ''} deep)`}
 Path: ${hierarchyPath}
 
 📋 **Task Details:**
 • Details: ${createdTask.details}
-• Priority: ${createdTask.priority}/10
-• Complexity: ${createdTask.complexity || 'Not set'}/10
 • Status: ${createdTask.status}
 • Tags: ${createdTask.tags?.join(', ') || 'None'}
 • Dependencies: ${createdTask.dependsOn?.length ? createdTask.dependsOn.join(', ') : 'None'}

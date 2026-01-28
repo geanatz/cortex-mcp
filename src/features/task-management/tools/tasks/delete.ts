@@ -3,6 +3,7 @@ import { Storage } from '../../storage/storage.js';
 
 /**
  * Delete a task and all associated subtasks
+ * Version 5.0: Simplified - ID=folder name, no name field
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for deleting tasks
@@ -70,7 +71,7 @@ export function createDeleteTaskTool(storage: Storage) {
             type: 'text' as const,
             text: `✅ Task deleted successfully!
 
-**Deleted:** "${task.name}" (ID: ${task.id})
+**Deleted:** "${task.id}"
 **Also deleted:** ${childTasks.length} child task(s)
 
 This action cannot be undone. All data associated with this task has been permanently removed.`
