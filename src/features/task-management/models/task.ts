@@ -1,14 +1,13 @@
 /**
  * Task data model for the task management system
- * Version 5.0.0: Simplified model
- * - ID = folder name (e.g., '001-implement-auth')
- * - No name field (use id for display)
- * - No priority or complexity fields
+ * Version 6.0.0: Improved ID generation from details
+ * - ID = folder name (e.g., '001-implement-auth') - acts as the task title
+ * - Details = comprehensive description
  */
 export interface Task {
-  /** Unique identifier for the task (same as folder name, e.g., '001-implement-auth') */
+  /** Unique identifier for the task (same as folder name, acts as task title, e.g., '001-implement-auth') */
   id: string;
-  /** Enhanced task description */
+  /** Comprehensive task description with full context and requirements */
   details: string;
   /** Reference to parent task ID (null for top-level tasks) */
   parentId?: string;
@@ -34,7 +33,7 @@ export interface Task {
  * Input data for creating a new task
  */
 export interface CreateTaskInput {
-  /** Enhanced task description (used to generate folder name/ID) */
+  /** Task description - first part used to generate folder name/ID, can include full details */
   details: string;
   /** Reference to parent task ID (optional, null for top-level tasks) */
   parentId?: string;
@@ -50,7 +49,7 @@ export interface CreateTaskInput {
  * Input data for updating an existing task
  */
 export interface UpdateTaskInput {
-  /** Enhanced task description (optional) */
+  /** Task description (optional) */
   details?: string;
   /** Reference to parent task (optional) */
   parentId?: string;

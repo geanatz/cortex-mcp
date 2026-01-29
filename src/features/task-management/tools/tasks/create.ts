@@ -4,7 +4,7 @@ import { Task } from '../../models/task.js';
 
 /**
  * Create a new task with unlimited nesting depth
- * Version 5.0: Simplified - ID=folder name, no name/priority/complexity fields
+ * Version 6.0: ID generated from details, acts as task title
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for creating tasks
@@ -12,7 +12,7 @@ import { Task } from '../../models/task.js';
 export function createCreateTaskTool(storage: Storage) {
   return {
     name: 'create_task',
-    description: 'Create a new task. The task ID will be automatically generated from the details (e.g., "001-implement-auth"). Supports unlimited nesting depth - set parentId to create subtasks.',
+    description: 'Create a new task. The task ID will be automatically generated from the details (e.g., "001-implement-auth") and serves as the task title. Supports unlimited nesting depth - set parentId to create subtasks.',
     inputSchema: {
       details: z.string(),
       parentId: z.string().optional(),

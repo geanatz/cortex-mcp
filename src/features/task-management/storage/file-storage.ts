@@ -6,14 +6,15 @@ import { Task, TaskHierarchy } from '../models/task.js';
 /**
  * File-based storage implementation using individual task folders
  * 
- * Version 5.0.0: Simplified folder-based architecture without index.json
+ * Version 6.0.0: Improved ID generation - ID acts as task title
  * 
  * Storage Structure:
  * - .cortex/tasks/{number}-{slug}/task.json - Individual task files
  * 
  * Features:
  * - Each task has its own folder with sequential numbering (001-, 002-, etc.)
- * - Task ID = folder name (e.g., '001-implement-auth')
+ * - Task ID = folder name (e.g., '001-implement-auth') - serves as the task title
+ * - ID generated from details field using intelligent extraction
  * - No index file - tasks discovered by scanning folders
  * - Atomic-ish file writes using temp files
  * - Unlimited task hierarchy via parentId
@@ -115,6 +116,7 @@ export class FileStorage implements Storage {
   /**
    * Generate task ID (folder name) from details
    * Format: {3-digit-number}-{sanitized-slug}
+   * Uses intelligent extraction to create a concise, descriptive ID
    */
   private generateTaskId(details: string, number: number): string {
     const paddedNumber = number.toString().padStart(3, '0');
@@ -277,7 +279,7 @@ export class FileStorage implements Storage {
       }
     }
 
-    // Get next number and generate task ID
+    // Get next number and generate task ID from details
     const nextNumber = await this.getNextNumber();
     const taskId = this.generateTaskId(task.details, nextNumber);
     

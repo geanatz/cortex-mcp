@@ -88,7 +88,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'Transform goals into actionable, trackable tasks. Build structured workflows that break down complex work into manageable components with unlimited hierarchy depth.',
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      details: z.string().describe('Detailed description of what the task involves (used to generate ID)'),
+      details: z.string().describe('Task description - used to generate the task ID (e.g., "Implement authentication" becomes "001-implement-authentication")'),
       parentId: z.string().optional().describe('Parent task ID for unlimited nesting (optional - creates top-level task if not specified)'),
       dependsOn: z.array(z.string()).optional().describe('Array of task IDs that must be completed before this task'),
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional().describe('Initial task status (defaults to pending)'),
@@ -148,7 +148,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     {
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       id: z.string().describe('The unique identifier of the task to update'),
-      details: z.string().optional().describe('New detailed description for the task (optional)'),
+      details: z.string().optional().describe('Updated task description (optional)'),
       completed: z.boolean().optional().describe('Mark task as completed (true) or incomplete (false) (optional)'),
       parentId: z.string().optional().describe('Updated parent task ID for moving between hierarchy levels (optional - use null/empty to move to top level)'),
       dependsOn: z.array(z.string()).optional().describe('Updated array of task IDs that must be completed before this task'),

@@ -7,9 +7,10 @@ export { CURRENT_STORAGE_VERSION };
 /**
  * Storage interface for the task management system
  * 
- * Version 5.0.0: Simplified architecture without index.json
+ * Version 6.0.0: Improved ID generation - ID acts as task title
  * - Tasks stored in .cortex/tasks/{number}-{slug}/task.json
- * - Task ID = folder name (e.g., '001-implement-auth')
+ * - Task ID = folder name (e.g., '001-implement-auth') - serves as the task title
+ * - ID generated intelligently from details field (first 50 chars, sanitized)
  * - No index file - tasks discovered by scanning folders
  * - Supports unlimited task hierarchy via parentId
  */

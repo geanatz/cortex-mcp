@@ -54,8 +54,10 @@ export function createGetTaskTool(storage: Storage) {
             type: 'text' as const,
             text: `**${task.id}**
 
-**Status:** ${status}
+**Status:** ${task.status || 'pending'} ${task.completed ? '(Completed)' : ''}
 **Details:** ${task.details}
+**Tags:** ${task.tags?.join(', ') || 'None'}
+**Dependencies:** ${task.dependsOn?.length ? task.dependsOn.join(', ') : 'None'}
 
 **Created:** ${new Date(task.createdAt).toLocaleString()}
 **Last Updated:** ${new Date(task.updatedAt).toLocaleString()}${childTaskSummary}
