@@ -3,6 +3,7 @@ import { FileStorage } from './features/task-management/storage/file-storage.js'
 import { FileStorage as MemoryFileStorage } from './features/agent-memories/storage/file-storage.js';
 import { getVersion } from './utils/version.js';
 import { StorageConfig, resolveWorkingDirectory, getWorkingDirectoryDescription } from './utils/storage-config.js';
+import { createErrorResponse } from './utils/error-handler.js';
 import { z } from 'zod';
 
 // Task tools
@@ -61,24 +62,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format (default: true)'),
       includeCompleted: z.boolean().optional().describe('Include completed tasks in results (default: true)')
     },
-    async ({ workingDirectory, parentId, showHierarchy, includeCompleted }: {
-      workingDirectory: string;
-      parentId?: string;
-      showHierarchy?: boolean;
-      includeCompleted?: boolean;
-    }) => {
+    async ({ workingDirectory, parentId, showHierarchy, includeCompleted }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createListTasksTool(storage);
         return await tool.handler({ parentId, showHierarchy, includeCompleted });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -94,26 +84,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional().describe('Initial task status (defaults to pending)'),
       tags: z.array(z.string()).optional().describe('Tags for categorization and filtering')
     },
-    async ({ workingDirectory, details, parentId, dependsOn, status, tags }: {
-      workingDirectory: string;
-      details: string;
-      parentId?: string;
-      dependsOn?: string[];
-      status?: 'pending' | 'in-progress' | 'blocked' | 'done';
-      tags?: string[];
-    }) => {
+    async ({ workingDirectory, details, parentId, dependsOn, status, tags }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createCreateTaskTool(storage);
         return await tool.handler({ details, parentId, dependsOn, status, tags });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -125,19 +102,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       id: z.string().describe('The unique identifier of the task to retrieve')
     },
-    async ({ workingDirectory, id }: { workingDirectory: string; id: string }) => {
+    async ({ workingDirectory, id }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createGetTaskTool(storage);
         return await tool.handler({ id });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -172,13 +143,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createUpdateTaskTool(storage);
         return await tool.handler({ id, details, completed, parentId, dependsOn, status, tags, actualHours });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -191,19 +156,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       id: z.string().describe('The unique identifier of the task to delete'),
       confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
     },
-    async ({ workingDirectory, id, confirm }: { workingDirectory: string; id: string; confirm: boolean }) => {
+    async ({ workingDirectory, id, confirm }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createDeleteTaskTool(storage);
         return await tool.handler({ id, confirm });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -222,13 +181,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createMoveTaskTool(storage);
         return await tool.handler({ taskId, newParentId });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -244,25 +197,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       metadata: z.record(z.any()).optional().describe('Optional metadata as key-value pairs for additional context'),
       category: z.string().optional().describe('Optional category to organize memories (e.g., "user_preferences", "project_context")')
     },
-    async ({ workingDirectory, title, content, metadata, category }: {
-      workingDirectory: string;
-      title: string;
-      content: string;
-      metadata?: Record<string, any>;
-      category?: string;
-    }) => {
+    async ({ workingDirectory, title, content, metadata, category }) => {
       try {
         const storage = await createMemoryStorage(workingDirectory, config);
         const tool = createCreateMemoryTool(storage);
         return await tool.handler({ title, content, metadata, category });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -289,13 +230,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createSearchMemoriesTool(storage);
         return await tool.handler({ query, limit, threshold, category });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -307,19 +242,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       id: z.string().describe('The unique identifier of the memory to retrieve')
     },
-    async ({ workingDirectory, id }: { workingDirectory: string; id: string }) => {
+    async ({ workingDirectory, id }) => {
       try {
         const storage = await createMemoryStorage(workingDirectory, config);
         const tool = createGetMemoryTool(storage);
         return await tool.handler({ id });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -342,13 +271,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createListMemoriesTool(storage);
         return await tool.handler({ category, limit });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -377,13 +300,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createUpdateMemoryTool(storage);
         return await tool.handler({ id, title, content, metadata, category });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );
@@ -396,19 +313,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       id: z.string().describe('The unique identifier of the memory to delete'),
       confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
     },
-    async ({ workingDirectory, id, confirm }: { workingDirectory: string; id: string; confirm: boolean }) => {
+    async ({ workingDirectory, id, confirm }) => {
       try {
         const storage = await createMemoryStorage(workingDirectory, config);
         const tool = createDeleteMemoryTool(storage);
         return await tool.handler({ id, confirm });
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`
-          }],
-          isError: true
-        };
+        return createErrorResponse(error);
       }
     }
   );

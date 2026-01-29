@@ -2,6 +2,8 @@ import { promises as fs } from 'fs';
 import { join, basename } from 'path';
 import { MemoryStorage } from './storage.js';
 import { Memory, SearchMemoryInput, MemorySearchResult } from '../models/memory.js';
+import { fileExists, ensureDirectory, atomicWriteFile } from '../../../utils/file-utils.js';
+import { sanitizeFileName } from '../../../utils/string-utils.js';
 
 /**
  * File-based storage implementation for agent memories
@@ -41,49 +43,21 @@ export class FileStorage implements MemoryStorage {
    * Initialize the file storage system
    */
   async initialize(): Promise<void> {
-    try {
-      // Validate that working directory exists
-      await fs.access(this.workingDirectory);
-    } catch (error) {
+    // Validate that working directory exists
+    if (!await fileExists(this.workingDirectory)) {
       throw new Error(`Working directory does not exist or is not accessible: ${this.workingDirectory}`);
     }
 
-    try {
-      // Ensure .cortex directory exists
-      await fs.mkdir(this.storageDir, { recursive: true });
-
-      // Ensure memories directory exists
-      await fs.mkdir(this.memoriesDir, { recursive: true });
-    } catch (error) {
-      throw new Error(`Failed to initialize file storage: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    // Ensure directories exist
+    await ensureDirectory(this.storageDir);
+    await ensureDirectory(this.memoriesDir);
   }
 
   /**
-   * Sanitize a string for safe filesystem usage (kebab-case)
+   * Sanitize a string for safe filesystem usage
    */
   private sanitizeFileName(input: string): string {
-    // Convert to lowercase, replace spaces and unsafe characters with hyphens
-    let sanitized = input
-      .toLowerCase()
-      .trim()
-      .replace(/[/\\:*?"<>|]/g, '-') // Replace unsafe chars with hyphen
-      .replace(/\s+/g, '-') // Replace spaces with hyphen
-      .replace(/[^a-z0-9-]/g, '-') // Replace any remaining non-alphanumeric with hyphen
-      .replace(/-{2,}/g, '-') // Replace multiple hyphens with single
-      .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
-
-    // Limit length to 100 characters
-    if (sanitized.length > 100) {
-      sanitized = sanitized.substring(0, 100).replace(/-+$/, ''); // Clean trailing hyphen after truncation
-    }
-
-    // Ensure it's not empty
-    if (!sanitized) {
-      sanitized = 'memory';
-    }
-
-    return sanitized;
+    return sanitizeFileName(input, 100);
   }
 
   /**
@@ -272,7 +246,7 @@ export class FileStorage implements MemoryStorage {
     const baseNameWithExt = basename(basePath);
     const baseName = baseNameWithExt.replace(ext, '');
 
-    while (await this.fileExists(filePath)) {
+    while (await fileExists(filePath)) {
       filePath = join(this.memoriesDir, `${baseName}-${counter}${ext}`);
       counter++;
     }
@@ -280,14 +254,7 @@ export class FileStorage implements MemoryStorage {
     return filePath;
   }
 
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+
 
   /**
    * Create a new memory
@@ -299,7 +266,7 @@ export class FileStorage implements MemoryStorage {
 
     // Serialize and write to file
     const markdownContent = this.serializeToMarkdown(memory);
-    await fs.writeFile(filePath, markdownContent, 'utf-8');
+    await atomicWriteFile(filePath, markdownContent);
 
     return memory;
   }

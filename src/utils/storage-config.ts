@@ -47,14 +47,12 @@ export function resolveWorkingDirectory(providedPath: string, config: StorageCon
 }
 
 /**
- * Get updated parameter description for workingDirectory that includes --claude flag behavior
+ * Get parameter description for workingDirectory
  */
 export function getWorkingDirectoryDescription(config: StorageConfig): string {
-  const baseDescription = 'The full absolute path to the working directory where data is stored. MUST be an absolute path, never relative. Windows: "C:\\Users\\username\\project" or "D:\\projects\\my-app". Unix/Linux/macOS: "/home/username/project" or "/Users/username/project". Do NOT use: ".", "..", "~", "./folder", "../folder" or any relative paths. Ensure the path exists and is accessible before calling this tool.';
+  const baseDescription = 'The full absolute path to the working directory where data is stored. MUST be an absolute path, never relative.';
   
-  if (config.useGlobalDirectory) {
-    return baseDescription + ' NOTE: Server started with --claude flag, so this parameter is ignored and a global user directory is used instead.';
-  }
-  
-  return baseDescription + ' NOTE: When server is started with --claude flag, this parameter is ignored and a global user directory is used instead.';
+  return config.useGlobalDirectory 
+    ? baseDescription + ' NOTE: Server started with --claude flag, so this parameter is ignored.'
+    : baseDescription;
 }

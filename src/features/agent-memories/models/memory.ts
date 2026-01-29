@@ -72,12 +72,4 @@ export interface MemorySearchResult {
   distance: number;
 }
 
-/**
- * Configuration options for the memory system
- */
-export interface MemoryConfig {
-  /** Default similarity threshold for searches */
-  defaultThreshold: number;
-  /** Default maximum results for searches */
-  defaultLimit: number;
-}
+

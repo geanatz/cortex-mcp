@@ -3,7 +3,7 @@ import { Storage } from '../../storage/storage.js';
 
 /**
  * Update an existing task including hierarchy changes
- * Version 5.0: Simplified - ID=folder name, no name/priority/complexity fields
+ * ID=folder name, no name/priority/complexity fields
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for updating tasks

@@ -1,8 +1,7 @@
 /**
  * Task data model for the task management system
- * Version 6.0.0: Improved ID generation from details
- * - ID = folder name (e.g., '001-implement-auth') - acts as the task title
- * - Details = comprehensive description
+ * ID = folder name (e.g., '001-implement-auth') - acts as the task title
+ * Details = comprehensive description
  */
 export interface Task {
   /** Unique identifier for the task (same as folder name, acts as task title, e.g., '001-implement-auth') */
@@ -74,13 +73,4 @@ export interface TaskHierarchy {
   depth: number;
 }
 
-/**
- * Task tree traversal result
- */
-export interface TaskTreeNode {
-  id: string;
-  parentId?: string;
-  children: string[];
-  depth: number;
-  path: string[];
-}
+

@@ -2,11 +2,11 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { Storage, CURRENT_STORAGE_VERSION } from './storage.js';
 import { Task, TaskHierarchy } from '../models/task.js';
+import { fileExists, ensureDirectory, atomicWriteFile } from '../../../utils/file-utils.js';
+import { sanitizeFileName } from '../../../utils/string-utils.js';
 
 /**
  * File-based storage implementation using individual task folders
- * 
- * Version 6.0.0: Improved ID generation - ID acts as task title
  * 
  * Storage Structure:
  * - .cortex/tasks/{number}-{slug}/task.json - Individual task files
@@ -42,57 +42,25 @@ export class FileStorage implements Storage {
     }
 
     // Validate working directory exists
-    try {
-      await fs.access(this.workingDirectory);
-    } catch (error) {
+    if (!await fileExists(this.workingDirectory)) {
       throw new Error(`Working directory does not exist or is not accessible: ${this.workingDirectory}`);
     }
 
     // Ensure directories exist
-    await fs.mkdir(this.cortexDir, { recursive: true });
-    await fs.mkdir(this.tasksDir, { recursive: true });
+    await ensureDirectory(this.cortexDir);
+    await ensureDirectory(this.tasksDir);
 
     this.initialized = true;
   }
 
-  /**
-   * Check if a file or directory exists
-   */
-  private async fileExists(filePath: string): Promise<boolean> {
-    try {
-      await fs.access(filePath);
-      return true;
-    } catch {
-      return false;
-    }
-  }
+
 
   /**
    * Sanitize a string for safe filesystem usage
    * Used to generate folder name slugs from task details
    */
   private sanitizeName(input: string): string {
-    // Remove or replace unsafe characters
-    let sanitized = input
-      .toLowerCase()
-      .replace(/[/\\:*?"<>|]/g, '-') // Replace unsafe chars with dash
-      .replace(/\s+/g, '-') // Replace spaces with dash
-      .replace(/-{2,}/g, '-') // Replace multiple dashes with single
-      .replace(/^-+|-+$/g, ''); // Remove leading/trailing dashes
-
-    // Limit length to 50 characters
-    if (sanitized.length > 50) {
-      sanitized = sanitized.substring(0, 50);
-      // Don't end on a dash
-      sanitized = sanitized.replace(/-+$/, '');
-    }
-
-    // Ensure it's not empty
-    if (!sanitized) {
-      sanitized = 'task';
-    }
-
-    return sanitized;
+    return sanitizeFileName(input, 50);
   }
 
   /**
@@ -159,33 +127,19 @@ export class FileStorage implements Storage {
     const filePath = this.getTaskFilePath(taskId);
     
     // Ensure folder exists
-    await fs.mkdir(folderPath, { recursive: true });
+    await ensureDirectory(folderPath);
     
     const content = JSON.stringify(task, null, 2);
-    
-    // Write to temp file first, then rename (atomic on POSIX)
-    const tempFile = filePath + '.tmp';
-    try {
-      await fs.writeFile(tempFile, content, 'utf-8');
-      await fs.rename(tempFile, filePath);
-    } catch (error) {
-      try {
-        await fs.unlink(tempFile);
-      } catch { /* ignore */ }
-      throw error;
-    }
+    await atomicWriteFile(filePath, content);
   }
 
   /**
    * Delete a task folder
    */
   private async deleteTaskFolder(taskId: string): Promise<void> {
-    const folderPath = this.getTaskFolderPath(taskId);
     try {
-      await fs.rm(folderPath, { recursive: true, force: true });
-    } catch (error) {
-      // Ignore if folder doesn't exist
-    }
+      await fs.rm(this.getTaskFolderPath(taskId), { recursive: true, force: true });
+    } catch { /* ignore if folder doesn't exist */ }
   }
 
   /**

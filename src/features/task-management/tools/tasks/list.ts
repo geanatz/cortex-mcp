@@ -4,7 +4,7 @@ import { Task } from '../../models/task.js';
 
 /**
  * List tasks with hierarchical display, optionally filtered by parent
- * Version 5.0: Simplified - ID=folder name, no name/priority/complexity fields
+ * ID=folder name, no name/priority/complexity fields
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for listing tasks

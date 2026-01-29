@@ -3,7 +3,7 @@ import { Storage } from '../../storage/storage.js';
 
 /**
  * Get task details by ID
- * Version 5.0: Simplified - ID=folder name, no name field
+ * ID=folder name, no name field
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for getting task details

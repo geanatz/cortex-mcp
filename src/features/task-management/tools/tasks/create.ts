@@ -4,7 +4,7 @@ import { Task } from '../../models/task.js';
 
 /**
  * Create a new task with unlimited nesting depth
- * Version 6.0: ID generated from details, acts as task title
+ * ID generated from details, acts as task title
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for creating tasks

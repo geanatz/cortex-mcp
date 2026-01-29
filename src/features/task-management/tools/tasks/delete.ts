@@ -3,7 +3,7 @@ import { Storage } from '../../storage/storage.js';
 
 /**
  * Delete a task and all associated subtasks
- * Version 5.0: Simplified - ID=folder name, no name field
+ * ID=folder name, no name field
  *
  * @param storage - Storage instance
  * @returns MCP tool handler for deleting tasks
