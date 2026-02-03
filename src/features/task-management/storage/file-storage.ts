@@ -2,6 +2,14 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { Storage, CURRENT_STORAGE_VERSION } from './storage.js';
 import { Task, TaskHierarchy } from '../models/task.js';
+import { 
+  Artifact, 
+  ArtifactInput, 
+  ArtifactPhase, 
+  TaskArtifacts, 
+  ARTIFACT_PHASES,
+  getArtifactFilename 
+} from '../models/artifact.js';
 import { fileExists, ensureDirectory, atomicWriteFile } from '../../../utils/file-utils.js';
 import { sanitizeFileName } from '../../../utils/string-utils.js';
 
@@ -398,5 +406,199 @@ export class FileStorage implements Storage {
     }
 
     return false;
+  }
+
+  // ==================== Artifact Operations ====================
+
+  /**
+   * Get the file path for an artifact
+   */
+  private getArtifactFilePath(taskId: string, phase: ArtifactPhase): string {
+    return join(this.getTaskFolderPath(taskId), getArtifactFilename(phase));
+  }
+
+  /**
+   * Parse artifact file content (YAML frontmatter + markdown body)
+   */
+  private parseArtifactContent(fileContent: string): Artifact {
+    const frontmatterRegex = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
+    const match = fileContent.match(frontmatterRegex);
+
+    if (!match) {
+      throw new Error('Invalid artifact format: missing YAML frontmatter');
+    }
+
+    const yamlContent = match[1];
+    const markdownContent = match[2].trim();
+
+    // Parse YAML manually (simple key: value pairs)
+    const metadata: Record<string, unknown> = {};
+    for (const line of yamlContent.split('\n')) {
+      const colonIndex = line.indexOf(':');
+      if (colonIndex > 0) {
+        const key = line.slice(0, colonIndex).trim();
+        let value: unknown = line.slice(colonIndex + 1).trim();
+        
+        // Handle specific type conversions
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+        else if (!isNaN(Number(value)) && value !== '') value = Number(value);
+        // Remove quotes if present
+        else if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+        
+        metadata[key] = value;
+      }
+    }
+
+    return {
+      metadata: {
+        phase: metadata.phase as ArtifactPhase,
+        status: metadata.status as Artifact['metadata']['status'],
+        createdAt: metadata.createdAt as string,
+        updatedAt: metadata.updatedAt as string,
+        retries: metadata.retries as number | undefined,
+        error: metadata.error as string | undefined
+      },
+      content: markdownContent
+    };
+  }
+
+  /**
+   * Serialize artifact to file content (YAML frontmatter + markdown body)
+   */
+  private serializeArtifact(artifact: Artifact): string {
+    const lines: string[] = ['---'];
+    
+    lines.push(`phase: ${artifact.metadata.phase}`);
+    lines.push(`status: ${artifact.metadata.status}`);
+    lines.push(`createdAt: ${artifact.metadata.createdAt}`);
+    lines.push(`updatedAt: ${artifact.metadata.updatedAt}`);
+    
+    if (artifact.metadata.retries !== undefined) {
+      lines.push(`retries: ${artifact.metadata.retries}`);
+    }
+    if (artifact.metadata.error) {
+      lines.push(`error: "${artifact.metadata.error.replace(/"/g, '\\"')}"`);
+    }
+    
+    lines.push('---');
+    lines.push('');
+    lines.push(artifact.content);
+    
+    return lines.join('\n');
+  }
+
+  /**
+   * Get a single artifact for a task
+   */
+  async getArtifact(taskId: string, phase: ArtifactPhase): Promise<Artifact | null> {
+    try {
+      // Verify task exists
+      const task = await this.getTask(taskId);
+      if (!task) return null;
+
+      const filePath = this.getArtifactFilePath(taskId, phase);
+      if (!await fileExists(filePath)) {
+        return null;
+      }
+
+      const content = await fs.readFile(filePath, 'utf-8');
+      return this.parseArtifactContent(content);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get all artifacts for a task
+   */
+  async getAllArtifacts(taskId: string): Promise<TaskArtifacts> {
+    const artifacts: TaskArtifacts = {};
+
+    for (const phase of ARTIFACT_PHASES) {
+      const artifact = await this.getArtifact(taskId, phase);
+      if (artifact) {
+        artifacts[phase] = artifact;
+      }
+    }
+
+    return artifacts;
+  }
+
+  /**
+   * Create a new artifact for a task
+   * Overwrites existing artifact if present
+   */
+  async createArtifact(taskId: string, phase: ArtifactPhase, input: ArtifactInput): Promise<Artifact> {
+    // Verify task exists
+    const task = await this.getTask(taskId);
+    if (!task) {
+      throw new Error(`Task with id '${taskId}' not found`);
+    }
+
+    const now = new Date().toISOString();
+    const artifact: Artifact = {
+      metadata: {
+        phase,
+        status: input.status || 'completed',
+        createdAt: now,
+        updatedAt: now,
+        retries: input.retries,
+        error: input.error
+      },
+      content: input.content
+    };
+
+    const filePath = this.getArtifactFilePath(taskId, phase);
+    const fileContent = this.serializeArtifact(artifact);
+    await atomicWriteFile(filePath, fileContent);
+
+    return artifact;
+  }
+
+  /**
+   * Update an existing artifact
+   */
+  async updateArtifact(taskId: string, phase: ArtifactPhase, input: Partial<ArtifactInput>): Promise<Artifact | null> {
+    const existingArtifact = await this.getArtifact(taskId, phase);
+    if (!existingArtifact) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const updatedArtifact: Artifact = {
+      metadata: {
+        ...existingArtifact.metadata,
+        status: input.status ?? existingArtifact.metadata.status,
+        updatedAt: now,
+        retries: input.retries ?? existingArtifact.metadata.retries,
+        error: input.error ?? existingArtifact.metadata.error
+      },
+      content: input.content ?? existingArtifact.content
+    };
+
+    const filePath = this.getArtifactFilePath(taskId, phase);
+    const fileContent = this.serializeArtifact(updatedArtifact);
+    await atomicWriteFile(filePath, fileContent);
+
+    return updatedArtifact;
+  }
+
+  /**
+   * Delete an artifact
+   */
+  async deleteArtifact(taskId: string, phase: ArtifactPhase): Promise<boolean> {
+    try {
+      const filePath = this.getArtifactFilePath(taskId, phase);
+      if (!await fileExists(filePath)) {
+        return false;
+      }
+      await fs.unlink(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

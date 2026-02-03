@@ -1,7 +1,7 @@
 {
   "name": "@geanatz/cortex-mcp",
-  "version": "3.0.0",
-  "description": "A comprehensive MCP server for task management and agent memories with separated JSON file storage architecture",
+  "version": "4.0.0",
+  "description": "An MCP server for task-based orchestration workflows with phase artifacts for agentic development",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
@@ -17,12 +17,12 @@
     "mcp",
     "model-context-protocol",
     "task-management",
-    "agent-memories",
-    "json-storage",
+    "orchestration",
+    "agentic-workflow",
     "file-storage",
-    "text-search",
     "productivity",
-    "ai-tools"
+    "ai-tools",
+    "opencode"
   ],
   "author": "Geanatz",
   "license": "MIT",

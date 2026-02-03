@@ -5,9 +5,13 @@
  * ID generated from details field using intelligent slug extraction
  * Details can be comprehensive, ID is auto-generated from key parts
  * No index.json - tasks are discovered by scanning folders
+ * 
+ * Artifacts stored in task folders as {phase}.md files
+ * Each phase (explore, search, plan, build, test) has its own artifact
  */
 
 /**
  * Current schema version for the task storage format
+ * v7.0.0 - Added artifact support for orchestration workflows
  */
-export const CURRENT_STORAGE_VERSION = '6.0.0';
+export const CURRENT_STORAGE_VERSION = '7.0.0';
