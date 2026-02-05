@@ -1,23 +1,53 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { Storage, CURRENT_STORAGE_VERSION } from './storage.js';
-import { Task, TaskHierarchy } from '../models/task.js';
+import { BaseStorage, CURRENT_STORAGE_VERSION, StorageStats } from './storage.js';
+import { 
+  Task, 
+  TaskHierarchy, 
+  CreateTaskInput, 
+  UpdateTaskInput,
+  TaskStatus 
+} from '../models/task.js';
 import { 
   Artifact, 
-  ArtifactInput, 
+  CreateArtifactInput,
+  UpdateArtifactInput,
   ArtifactPhase, 
+  ArtifactStatus,
   TaskArtifacts, 
   ARTIFACT_PHASES,
   getArtifactFilename 
 } from '../models/artifact.js';
-import { fileExists, ensureDirectory, atomicWriteFile } from '../../../utils/file-utils.js';
-import { sanitizeFileName } from '../../../utils/string-utils.js';
+import { 
+  STORAGE_PATHS, 
+  TASK_NUMBERING, 
+  FILE_NAMING,
+  CACHE_CONFIG 
+} from '../models/config.js';
+import { 
+  fileExists, 
+  ensureDirectory, 
+  atomicWriteFile,
+  readJsonFileOrNull,
+  writeJsonFile,
+  listDirectory,
+  deleteDirectory,
+  deleteFile,
+  readFileOrNull
+} from '../../../utils/file-utils.js';
+import { sanitizeFileName, padNumber } from '../../../utils/string-utils.js';
+import { Cache, CacheKeys, InvalidationPatterns } from '../../../utils/cache.js';
+import { NotFoundError, StorageError, ConflictError } from '../../../errors/errors.js';
+import { createLogger } from '../../../utils/logger.js';
+
+const logger = createLogger('file-storage');
 
 /**
  * File-based storage implementation using individual task folders
  * 
  * Storage Structure:
  * - .cortex/tasks/{number}-{slug}/task.json - Individual task files
+ * - .cortex/tasks/{number}-{slug}/{phase}.md - Artifact files
  * 
  * Features:
  * - Each task has its own folder with sequential numbering (001-, 002-, etc.)
@@ -26,20 +56,37 @@ import { sanitizeFileName } from '../../../utils/string-utils.js';
  * - No index file - tasks discovered by scanning folders
  * - Atomic-ish file writes using temp files
  * - Unlimited task hierarchy via parentId
+ * - In-memory caching with TTL for improved performance
  */
-export class FileStorage implements Storage {
-  private workingDirectory: string;
-  private cortexDir: string;
-  private tasksDir: string;
+export class FileStorage extends BaseStorage {
+  private readonly workingDirectory: string;
+  private readonly cortexDir: string;
+  private readonly tasksDir: string;
   
-  // Initialization state
-  private initialized: boolean = false;
+  // Caches for performance
+  private readonly taskCache: Cache<Task>;
+  private readonly artifactCache: Cache<Artifact>;
+  private taskFoldersCache: string[] | null = null;
+  private taskFoldersCacheTime: number = 0;
 
   constructor(workingDirectory: string) {
+    super();
     this.workingDirectory = workingDirectory;
-    this.cortexDir = join(workingDirectory, '.cortex');
-    this.tasksDir = join(this.cortexDir, 'tasks');
+    this.cortexDir = join(workingDirectory, STORAGE_PATHS.ROOT_DIR);
+    this.tasksDir = join(this.cortexDir, STORAGE_PATHS.TASKS_DIR);
+    
+    // Initialize caches
+    this.taskCache = new Cache<Task>({ 
+      defaultTtl: CACHE_CONFIG.DEFAULT_TTL,
+      maxSize: CACHE_CONFIG.MAX_SIZE 
+    });
+    this.artifactCache = new Cache<Artifact>({ 
+      defaultTtl: CACHE_CONFIG.DEFAULT_TTL,
+      maxSize: CACHE_CONFIG.MAX_SIZE 
+    });
   }
+
+  // ==================== Initialization ====================
 
   /**
    * Initialize storage by validating working directory and ensuring directories exist
@@ -49,9 +96,14 @@ export class FileStorage implements Storage {
       return;
     }
 
+    logger.debug('Initializing file storage', { workingDirectory: this.workingDirectory });
+
     // Validate working directory exists
     if (!await fileExists(this.workingDirectory)) {
-      throw new Error(`Working directory does not exist or is not accessible: ${this.workingDirectory}`);
+      throw StorageError.initializationError(
+        this.workingDirectory,
+        `Working directory does not exist or is not accessible: ${this.workingDirectory}`
+      );
     }
 
     // Ensure directories exist
@@ -59,116 +111,130 @@ export class FileStorage implements Storage {
     await ensureDirectory(this.tasksDir);
 
     this.initialized = true;
+    logger.debug('File storage initialized successfully');
   }
 
+  getWorkingDirectory(): string {
+    return this.workingDirectory;
+  }
 
+  // ==================== Private Helpers ====================
 
   /**
    * Sanitize a string for safe filesystem usage
-   * Used to generate folder name slugs from task details
    */
   private sanitizeName(input: string): string {
-    return sanitizeFileName(input, 50);
+    return sanitizeFileName(input, FILE_NAMING.MAX_SLUG_LENGTH);
   }
 
   /**
    * Get the next sequential number by scanning existing task folders
    */
   private async getNextNumber(): Promise<number> {
-    try {
-      const entries = await fs.readdir(this.tasksDir, { withFileTypes: true });
-      const taskFolders = entries
-        .filter(e => e.isDirectory() && /^\d{3}-/.test(e.name))
-        .map(e => parseInt(e.name.slice(0, 3), 10))
-        .filter(n => !isNaN(n));
+    const folders = await this.getTaskFolders();
+    const numbers = folders
+      .filter(name => TASK_NUMBERING.PATTERN.test(name))
+      .map(name => parseInt(name.slice(0, TASK_NUMBERING.DIGITS), 10))
+      .filter(n => !isNaN(n));
 
-      if (taskFolders.length === 0) return 1;
-      return Math.max(...taskFolders) + 1;
-    } catch {
-      return 1;
-    }
+    if (numbers.length === 0) return 1;
+    return Math.max(...numbers) + 1;
   }
 
   /**
    * Generate task ID (folder name) from details
-   * Format: {3-digit-number}-{sanitized-slug}
-   * Uses intelligent extraction to create a concise, descriptive ID
    */
   private generateTaskId(details: string, number: number): string {
-    const paddedNumber = number.toString().padStart(3, '0');
+    const paddedNumber = padNumber(number, TASK_NUMBERING.DIGITS);
     const sanitizedSlug = this.sanitizeName(details);
     return `${paddedNumber}-${sanitizedSlug}`;
   }
 
   /**
-   * Get task folder path by task ID (folder name)
+   * Get task folder path
    */
   private getTaskFolderPath(taskId: string): string {
     return join(this.tasksDir, taskId);
   }
 
   /**
-   * Get task file path by task ID (folder name)
+   * Get task file path
    */
   private getTaskFilePath(taskId: string): string {
-    return join(this.getTaskFolderPath(taskId), 'task.json');
+    return join(this.getTaskFolderPath(taskId), STORAGE_PATHS.TASK_FILE);
   }
 
   /**
-   * Load a task from its folder
+   * Get artifact file path
    */
-  private async loadTaskFromFolder(taskId: string): Promise<Task | null> {
-    try {
-      const filePath = this.getTaskFilePath(taskId);
-      const content = await fs.readFile(filePath, 'utf-8');
-      return JSON.parse(content) as Task;
-    } catch (error) {
-      return null;
+  private getArtifactFilePath(taskId: string, phase: ArtifactPhase): string {
+    return join(this.getTaskFolderPath(taskId), getArtifactFilename(phase));
+  }
+
+  /**
+   * Get all task folder names (with caching)
+   */
+  private async getTaskFolders(): Promise<string[]> {
+    const now = Date.now();
+    const cacheAge = now - this.taskFoldersCacheTime;
+    
+    // Use cache if fresh (within 1 second)
+    if (this.taskFoldersCache && cacheAge < 1000) {
+      return this.taskFoldersCache;
     }
+
+    this.taskFoldersCache = await listDirectory(this.tasksDir, {
+      directoriesOnly: true,
+      pattern: TASK_NUMBERING.PATTERN,
+      sort: true
+    });
+    this.taskFoldersCacheTime = now;
+    
+    return this.taskFoldersCache;
   }
 
   /**
-   * Save a task to its folder with atomic-ish write
+   * Invalidate task folders cache
    */
-  private async saveTaskToFolder(taskId: string, task: Task): Promise<void> {
+  private invalidateTaskFoldersCache(): void {
+    this.taskFoldersCache = null;
+    this.taskFoldersCacheTime = 0;
+  }
+
+  /**
+   * Load a task from disk (with caching)
+   */
+  private async loadTask(taskId: string): Promise<Task | null> {
+    // Check cache first
+    const cached = this.taskCache.get(CacheKeys.task(taskId));
+    if (cached) {
+      return cached;
+    }
+
+    const task = await readJsonFileOrNull<Task>(this.getTaskFilePath(taskId));
+    if (task) {
+      this.taskCache.set(CacheKeys.task(taskId), task);
+    }
+    return task;
+  }
+
+  /**
+   * Save a task to disk and update cache
+   */
+  private async saveTask(taskId: string, task: Task): Promise<void> {
     const folderPath = this.getTaskFolderPath(taskId);
-    const filePath = this.getTaskFilePath(taskId);
-    
-    // Ensure folder exists
     await ensureDirectory(folderPath);
+    await writeJsonFile(this.getTaskFilePath(taskId), task);
     
-    const content = JSON.stringify(task, null, 2);
-    await atomicWriteFile(filePath, content);
-  }
-
-  /**
-   * Delete a task folder
-   */
-  private async deleteTaskFolder(taskId: string): Promise<void> {
-    try {
-      await fs.rm(this.getTaskFolderPath(taskId), { recursive: true, force: true });
-    } catch { /* ignore if folder doesn't exist */ }
-  }
-
-  /**
-   * Get all task folder names from the tasks directory
-   */
-  private async getAllTaskFolders(): Promise<string[]> {
-    try {
-      const entries = await fs.readdir(this.tasksDir, { withFileTypes: true });
-      return entries
-        .filter(e => e.isDirectory() && /^\d{3}-/.test(e.name))
-        .map(e => e.name)
-        .sort(); // Sort by folder name (which includes number prefix)
-    } catch {
-      return [];
-    }
+    // Update cache
+    this.taskCache.set(CacheKeys.task(taskId), task);
+    this.invalidateTaskFoldersCache();
   }
 
   /**
    * Calculate task level in hierarchy
    */
-  private calculateTaskLevel(task: Task, allTasks: Task[]): number {
+  private calculateTaskLevel(task: Task, allTasks: readonly Task[]): number {
     if (!task.parentId) return 0;
 
     let level = 0;
@@ -186,32 +252,18 @@ export class FileStorage implements Storage {
     return level;
   }
 
-  // ==================== Public API ====================
-
-  /**
-   * Get current storage version
-   */
-  getVersion(): string {
-    return CURRENT_STORAGE_VERSION;
-  }
-
   // ==================== Task Operations ====================
 
-  async getTasks(parentId?: string): Promise<Task[]> {
-    const folders = await this.getAllTaskFolders();
+  async getTasks(parentId?: string): Promise<readonly Task[]> {
+    const folders = await this.getTaskFolders();
     const tasks: Task[] = [];
     
-    // Load all tasks from their folders
+    // Load all tasks (utilizing cache)
     for (const folder of folders) {
-      const task = await this.loadTaskFromFolder(folder);
+      const task = await this.loadTask(folder);
       if (task) {
         tasks.push(task);
       }
-    }
-
-    // Filter by parentId if specified
-    if (parentId !== undefined) {
-      return tasks.filter(t => t.parentId === parentId);
     }
 
     // Calculate levels for all tasks
@@ -219,12 +271,16 @@ export class FileStorage implements Storage {
       task.level = this.calculateTaskLevel(task, tasks);
     }
 
+    // Filter by parentId if specified
+    if (parentId !== undefined) {
+      return tasks.filter(t => t.parentId === parentId);
+    }
+
     return tasks;
   }
 
   async getTask(id: string): Promise<Task | null> {
-    // ID is the folder name - load directly
-    const task = await this.loadTaskFromFolder(id);
+    const task = await this.loadTask(id);
     if (task) {
       const allTasks = await this.getTasks();
       task.level = this.calculateTaskLevel(task, allTasks);
@@ -232,76 +288,97 @@ export class FileStorage implements Storage {
     return task;
   }
 
-  async createTask(task: Task): Promise<Task> {
+  async createTask(input: CreateTaskInput): Promise<Task> {
     // Validate parent exists if specified
-    if (task.parentId) {
-      const parent = await this.getTask(task.parentId);
+    if (input.parentId) {
+      const parent = await this.getTask(input.parentId);
       if (!parent) {
-        throw new Error('Parent task with id ' + task.parentId + ' not found');
+        throw NotFoundError.parent(input.parentId);
       }
     }
 
-    // Get next number and generate task ID from details
+    // Get next number and generate task ID
     const nextNumber = await this.getNextNumber();
-    const taskId = this.generateTaskId(task.details, nextNumber);
+    const taskId = this.generateTaskId(input.details, nextNumber);
     
-    // Set the ID to the folder name
-    task.id = taskId;
+    const now = new Date().toISOString();
+    const task: Task = {
+      id: taskId,
+      details: input.details.trim(),
+      parentId: input.parentId?.trim(),
+      createdAt: now,
+      updatedAt: now,
+      dependsOn: input.dependsOn || [],
+      status: input.status || 'pending',
+      tags: input.tags || [],
+    };
     
-    // Save task to folder
-    await this.saveTaskToFolder(taskId, task);
+    // Save task
+    await this.saveTask(taskId, task);
 
     // Calculate level
     const allTasks = await this.getTasks();
     task.level = this.calculateTaskLevel(task, allTasks);
 
+    logger.debug('Task created', { taskId });
     return task;
   }
 
-  async updateTask(id: string, updates: Partial<Task>): Promise<Task | null> {
-    const task = await this.loadTaskFromFolder(id);
+  async updateTask(id: string, updates: UpdateTaskInput): Promise<Task | null> {
+    const task = await this.loadTask(id);
     if (!task) return null;
 
-    // If updating parentId, validate the new parent
+    // Validate new parent if changing
     if (updates.parentId !== undefined && updates.parentId) {
       const parent = await this.getTask(updates.parentId);
       if (!parent) {
-        throw new Error('Parent task with id ' + updates.parentId + ' not found');
+        throw NotFoundError.parent(updates.parentId);
       }
-      // Prevent circular references
       if (await this.wouldCreateCircularReference(id, updates.parentId)) {
-        throw new Error('Moving task would create a circular reference');
+        throw ConflictError.circularReference(id, updates.parentId);
       }
     }
 
-    // Merge updates (don't allow changing ID)
+    // Merge updates
     const updatedTask: Task = {
       ...task,
-      ...updates,
-      id: task.id, // Preserve original ID
-      updatedAt: new Date().toISOString()
+      details: updates.details?.trim() ?? task.details,
+      parentId: updates.parentId !== undefined ? updates.parentId?.trim() : task.parentId,
+      dependsOn: updates.dependsOn ?? task.dependsOn,
+      status: updates.status ?? task.status,
+      tags: updates.tags ?? task.tags,
+      actualHours: updates.actualHours ?? task.actualHours,
+      updatedAt: new Date().toISOString(),
     };
 
-    // Save updated task
-    await this.saveTaskToFolder(id, updatedTask);
+    // Save and invalidate cache
+    await this.saveTask(id, updatedTask);
+    this.taskCache.invalidate(InvalidationPatterns.task(id));
 
     // Calculate level
     const allTasks = await this.getTasks();
     updatedTask.level = this.calculateTaskLevel(updatedTask, allTasks);
 
+    logger.debug('Task updated', { taskId: id });
     return updatedTask;
   }
 
   async deleteTask(id: string): Promise<boolean> {
-    const task = await this.loadTaskFromFolder(id);
+    const task = await this.loadTask(id);
     if (!task) return false;
 
     // Delete all child tasks recursively first
     await this.deleteTasksByParent(id);
 
     // Delete the task folder
-    await this.deleteTaskFolder(id);
+    await deleteDirectory(this.getTaskFolderPath(id));
 
+    // Invalidate caches
+    this.taskCache.delete(CacheKeys.task(id));
+    this.artifactCache.invalidate(InvalidationPatterns.artifact(id));
+    this.invalidateTaskFoldersCache();
+
+    logger.debug('Task deleted', { taskId: id });
     return true;
   }
 
@@ -317,7 +394,8 @@ export class FileStorage implements Storage {
 
     // Delete direct children
     for (const child of childTasks) {
-      await this.deleteTaskFolder(child.id);
+      await deleteDirectory(this.getTaskFolderPath(child.id));
+      this.taskCache.delete(CacheKeys.task(child.id));
       deletedCount++;
     }
 
@@ -326,7 +404,7 @@ export class FileStorage implements Storage {
 
   // ==================== Task Hierarchy Operations ====================
 
-  async getTaskHierarchy(parentId?: string): Promise<TaskHierarchy[]> {
+  async getTaskHierarchy(parentId?: string): Promise<readonly TaskHierarchy[]> {
     const allTasks = await this.getTasks();
     const tasks = parentId !== undefined
       ? allTasks.filter(t => t.parentId === parentId)
@@ -335,7 +413,7 @@ export class FileStorage implements Storage {
     const hierarchies: TaskHierarchy[] = [];
 
     for (const task of tasks) {
-      const children = await this.buildTaskHierarchy(task.id, allTasks);
+      const children = this.buildTaskHierarchySync(task.id, allTasks);
       hierarchies.push({
         task,
         children,
@@ -346,12 +424,12 @@ export class FileStorage implements Storage {
     return hierarchies;
   }
 
-  private async buildTaskHierarchy(taskId: string, allTasks: Task[]): Promise<TaskHierarchy[]> {
+  private buildTaskHierarchySync(taskId: string, allTasks: readonly Task[]): readonly TaskHierarchy[] {
     const children = allTasks.filter(t => t.parentId === taskId);
     const hierarchies: TaskHierarchy[] = [];
 
     for (const child of children) {
-      const grandchildren = await this.buildTaskHierarchy(child.id, allTasks);
+      const grandchildren = this.buildTaskHierarchySync(child.id, allTasks);
       hierarchies.push({
         task: child,
         children: grandchildren,
@@ -362,12 +440,12 @@ export class FileStorage implements Storage {
     return hierarchies;
   }
 
-  async getTaskChildren(taskId: string): Promise<Task[]> {
+  async getTaskChildren(taskId: string): Promise<readonly Task[]> {
     const allTasks = await this.getTasks();
     return allTasks.filter(t => t.parentId === taskId);
   }
 
-  async getTaskAncestors(taskId: string): Promise<Task[]> {
+  async getTaskAncestors(taskId: string): Promise<readonly Task[]> {
     const ancestors: Task[] = [];
     let currentTask = await this.getTask(taskId);
 
@@ -381,18 +459,28 @@ export class FileStorage implements Storage {
     return ancestors;
   }
 
+  async getTaskDescendants(taskId: string): Promise<readonly Task[]> {
+    const descendants: Task[] = [];
+    const children = await this.getTaskChildren(taskId);
+    
+    for (const child of children) {
+      descendants.push(child);
+      const childDescendants = await this.getTaskDescendants(child.id);
+      descendants.push(...childDescendants);
+    }
+    
+    return descendants;
+  }
+
   async moveTask(taskId: string, newParentId?: string): Promise<Task | null> {
     if (newParentId && await this.wouldCreateCircularReference(taskId, newParentId)) {
-      throw new Error('Moving task would create a circular reference');
+      throw ConflictError.circularReference(taskId, newParentId);
     }
 
     return this.updateTask(taskId, { parentId: newParentId });
   }
 
-  /**
-   * Check if moving a task would create a circular reference
-   */
-  private async wouldCreateCircularReference(taskId: string, newParentId: string): Promise<boolean> {
+  async wouldCreateCircularReference(taskId: string, newParentId: string): Promise<boolean> {
     let currentParentId: string | undefined = newParentId;
     const visited = new Set<string>();
 
@@ -407,15 +495,7 @@ export class FileStorage implements Storage {
 
     return false;
   }
-
   // ==================== Artifact Operations ====================
-
-  /**
-   * Get the file path for an artifact
-   */
-  private getArtifactFilePath(taskId: string, phase: ArtifactPhase): string {
-    return join(this.getTaskFolderPath(taskId), getArtifactFilename(phase));
-  }
 
   /**
    * Parse artifact file content (YAML frontmatter + markdown body)
@@ -431,7 +511,7 @@ export class FileStorage implements Storage {
     const yamlContent = match[1];
     const markdownContent = match[2].trim();
 
-    // Parse YAML manually (simple key: value pairs)
+    // Parse YAML (simple key: value pairs)
     const metadata: Record<string, unknown> = {};
     for (const line of yamlContent.split('\n')) {
       const colonIndex = line.indexOf(':');
@@ -439,11 +519,10 @@ export class FileStorage implements Storage {
         const key = line.slice(0, colonIndex).trim();
         let value: unknown = line.slice(colonIndex + 1).trim();
         
-        // Handle specific type conversions
+        // Type conversions
         if (value === 'true') value = true;
         else if (value === 'false') value = false;
         else if (!isNaN(Number(value)) && value !== '') value = Number(value);
-        // Remove quotes if present
         else if (typeof value === 'string' && value.startsWith('"') && value.endsWith('"')) {
           value = value.slice(1, -1);
         }
@@ -455,7 +534,7 @@ export class FileStorage implements Storage {
     return {
       metadata: {
         phase: metadata.phase as ArtifactPhase,
-        status: metadata.status as Artifact['metadata']['status'],
+        status: metadata.status as ArtifactStatus,
         createdAt: metadata.createdAt as string,
         updatedAt: metadata.updatedAt as string,
         retries: metadata.retries as number | undefined,
@@ -466,7 +545,7 @@ export class FileStorage implements Storage {
   }
 
   /**
-   * Serialize artifact to file content (YAML frontmatter + markdown body)
+   * Serialize artifact to file content
    */
   private serializeArtifact(artifact: Artifact): string {
     const lines: string[] = ['---'];
@@ -490,52 +569,48 @@ export class FileStorage implements Storage {
     return lines.join('\n');
   }
 
-  /**
-   * Get a single artifact for a task
-   */
   async getArtifact(taskId: string, phase: ArtifactPhase): Promise<Artifact | null> {
+    // Check cache
+    const cacheKey = CacheKeys.artifact(taskId, phase);
+    const cached = this.artifactCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    // Verify task exists
+    const task = await this.getTask(taskId);
+    if (!task) return null;
+
+    const content = await readFileOrNull(this.getArtifactFilePath(taskId, phase));
+    if (!content) return null;
+
     try {
-      // Verify task exists
-      const task = await this.getTask(taskId);
-      if (!task) return null;
-
-      const filePath = this.getArtifactFilePath(taskId, phase);
-      if (!await fileExists(filePath)) {
-        return null;
-      }
-
-      const content = await fs.readFile(filePath, 'utf-8');
-      return this.parseArtifactContent(content);
+      const artifact = this.parseArtifactContent(content);
+      this.artifactCache.set(cacheKey, artifact);
+      return artifact;
     } catch {
       return null;
     }
   }
 
-  /**
-   * Get all artifacts for a task
-   */
   async getAllArtifacts(taskId: string): Promise<TaskArtifacts> {
     const artifacts: TaskArtifacts = {};
 
     for (const phase of ARTIFACT_PHASES) {
       const artifact = await this.getArtifact(taskId, phase);
       if (artifact) {
-        artifacts[phase] = artifact;
+        (artifacts as Record<ArtifactPhase, Artifact | undefined>)[phase] = artifact;
       }
     }
 
     return artifacts;
   }
 
-  /**
-   * Create a new artifact for a task
-   * Overwrites existing artifact if present
-   */
-  async createArtifact(taskId: string, phase: ArtifactPhase, input: ArtifactInput): Promise<Artifact> {
+  async createArtifact(taskId: string, phase: ArtifactPhase, input: CreateArtifactInput): Promise<Artifact> {
     // Verify task exists
     const task = await this.getTask(taskId);
     if (!task) {
-      throw new Error(`Task with id '${taskId}' not found`);
+      throw NotFoundError.task(taskId);
     }
 
     const now = new Date().toISOString();
@@ -548,20 +623,20 @@ export class FileStorage implements Storage {
         retries: input.retries,
         error: input.error
       },
-      content: input.content
+      content: input.content.trim()
     };
 
     const filePath = this.getArtifactFilePath(taskId, phase);
-    const fileContent = this.serializeArtifact(artifact);
-    await atomicWriteFile(filePath, fileContent);
+    await atomicWriteFile(filePath, this.serializeArtifact(artifact));
 
+    // Update cache
+    this.artifactCache.set(CacheKeys.artifact(taskId, phase), artifact);
+
+    logger.debug('Artifact created', { taskId, phase });
     return artifact;
   }
 
-  /**
-   * Update an existing artifact
-   */
-  async updateArtifact(taskId: string, phase: ArtifactPhase, input: Partial<ArtifactInput>): Promise<Artifact | null> {
+  async updateArtifact(taskId: string, phase: ArtifactPhase, input: UpdateArtifactInput): Promise<Artifact | null> {
     const existingArtifact = await this.getArtifact(taskId, phase);
     if (!existingArtifact) {
       return null;
@@ -576,29 +651,57 @@ export class FileStorage implements Storage {
         retries: input.retries ?? existingArtifact.metadata.retries,
         error: input.error ?? existingArtifact.metadata.error
       },
-      content: input.content ?? existingArtifact.content
+      content: input.content?.trim() ?? existingArtifact.content
     };
 
     const filePath = this.getArtifactFilePath(taskId, phase);
-    const fileContent = this.serializeArtifact(updatedArtifact);
-    await atomicWriteFile(filePath, fileContent);
+    await atomicWriteFile(filePath, this.serializeArtifact(updatedArtifact));
 
+    // Update cache
+    this.artifactCache.set(CacheKeys.artifact(taskId, phase), updatedArtifact);
+
+    logger.debug('Artifact updated', { taskId, phase });
     return updatedArtifact;
   }
 
-  /**
-   * Delete an artifact
-   */
   async deleteArtifact(taskId: string, phase: ArtifactPhase): Promise<boolean> {
-    try {
-      const filePath = this.getArtifactFilePath(taskId, phase);
-      if (!await fileExists(filePath)) {
-        return false;
-      }
-      await fs.unlink(filePath);
-      return true;
-    } catch {
-      return false;
+    const deleted = await deleteFile(this.getArtifactFilePath(taskId, phase));
+    
+    if (deleted) {
+      this.artifactCache.delete(CacheKeys.artifact(taskId, phase));
+      logger.debug('Artifact deleted', { taskId, phase });
     }
+    
+    return deleted;
+  }
+
+  // ==================== Utility Operations ====================
+
+  async getStats(): Promise<StorageStats> {
+    const folders = await this.getTaskFolders();
+    let artifactCount = 0;
+    
+    for (const folder of folders) {
+      for (const phase of ARTIFACT_PHASES) {
+        if (await fileExists(this.getArtifactFilePath(folder, phase))) {
+          artifactCount++;
+        }
+      }
+    }
+
+    const cacheStats = this.taskCache.getStats();
+    
+    return {
+      taskCount: folders.length,
+      artifactCount,
+      cacheHitRate: cacheStats.hitRate,
+    };
+  }
+
+  clearCache(): void {
+    this.taskCache.clear();
+    this.artifactCache.clear();
+    this.invalidateTaskFoldersCache();
+    logger.debug('Cache cleared');
   }
 }

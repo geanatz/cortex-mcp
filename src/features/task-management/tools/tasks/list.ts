@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { Storage } from '../../storage/storage.js';
-import { Task } from '../../models/task.js';
+import { Task, TaskHierarchy } from '../../models/task.js';
 
 /**
  * List tasks with hierarchical display, optionally filtered by parent
@@ -181,7 +181,7 @@ ${taskList}
 /**
  * Count total tasks in hierarchy
  */
-function countTasksInHierarchy(hierarchy: any[]): number {
+function countTasksInHierarchy(hierarchy: readonly TaskHierarchy[]): number {
   return hierarchy.reduce((count, item) => {
     return count + 1 + countTasksInHierarchy(item.children);
   }, 0);
@@ -190,7 +190,7 @@ function countTasksInHierarchy(hierarchy: any[]): number {
 /**
  * Count done tasks in hierarchy
  */
-function countDoneTasksInHierarchy(hierarchy: any[]): number {
+function countDoneTasksInHierarchy(hierarchy: readonly TaskHierarchy[]): number {
   return hierarchy.reduce((count, item) => {
     const thisCount = item.task.status === 'done' ? 1 : 0;
     return count + thisCount + countDoneTasksInHierarchy(item.children);

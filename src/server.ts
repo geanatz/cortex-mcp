@@ -1,8 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { FileStorage } from './features/task-management/storage/file-storage.js';
+import { Storage } from './features/task-management/storage/storage.js';
 import { getVersion } from './utils/version.js';
 import { StorageConfig, resolveWorkingDirectory, getWorkingDirectoryDescription } from './utils/storage-config.js';
-import { createErrorResponse } from './utils/error-handler.js';
+import { createErrorResponse, response } from './utils/response-builder.js';
+import { createLogger } from './utils/logger.js';
 import { z } from 'zod';
 
 // Task tools
@@ -15,6 +17,13 @@ import { createMoveTaskTool } from './features/task-management/tools/tasks/move.
 
 // Artifact tools
 import { createArtifactTools } from './features/task-management/tools/artifacts/index.js';
+
+const logger = createLogger('server');
+
+/**
+ * Storage factory type
+ */
+type StorageFactory = (workingDirectory: string, config: StorageConfig) => Promise<Storage>;
 
 /**
  * Create storage instance for a specific working directory
@@ -33,20 +42,27 @@ async function createStorage(workingDirectory: string, config: StorageConfig): P
  * - Removed memory features (deprecated)
  * - Added artifact support (explore, search, plan, build, test)
  * - Each task folder contains task.json + phase artifacts (*.md)
+ * - Enhanced caching and performance optimizations
+ * - Improved error handling with typed errors
  */
 export async function createServer(config: StorageConfig = { useGlobalDirectory: false }): Promise<McpServer> {
+  logger.info('Creating MCP server', { config });
+  
   // Create MCP server with dynamic version from package.json
   const server = new McpServer({
     name: '@geanatz/cortex-mcp',
     version: getVersion()
   });
 
+  // Common schema for working directory
+  const workingDirectorySchema = z.string().describe(getWorkingDirectoryDescription(config));
+
   // Register task management tools
   server.tool(
     'cortex_list_tasks',
     'List all tasks with hierarchical display. Filter by parentId for subtrees. Perfect for understanding current workflow state and task organization.',
     {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
+      workingDirectory: workingDirectorySchema,
       parentId: z.string().optional().describe('Filter to tasks under this parent (optional)'),
       showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format (default: true)'),
       includeDone: z.boolean().optional().describe('Include done tasks in results (default: true)')
@@ -57,6 +73,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createListTasksTool(storage);
         return await tool.handler({ parentId, showHierarchy, includeDone });
       } catch (error) {
+        logger.error('Error in cortex_list_tasks', error);
         return createErrorResponse(error);
       }
     }
@@ -66,7 +83,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'cortex_create_task',
     'Create a new task for the orchestration workflow. Task ID is auto-generated from details. Use parentId to create subtasks for hierarchical organization.',
     {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
+      workingDirectory: workingDirectorySchema,
       details: z.string().describe('Task description - used to generate the task ID (e.g., "Implement authentication" becomes "001-implement-authentication")'),
       parentId: z.string().optional().describe('Parent task ID for creating subtasks (optional - creates top-level task if not specified)'),
       dependsOn: z.array(z.string()).optional().describe('Array of task IDs that must be completed before this task'),
@@ -79,6 +96,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createCreateTaskTool(storage);
         return await tool.handler({ details, parentId, dependsOn, status, tags });
       } catch (error) {
+        logger.error('Error in cortex_create_task', error);
         return createErrorResponse(error);
       }
     }
@@ -88,7 +106,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'cortex_get_task',
     'Retrieve complete task details including all phase artifacts (explore, search, plan, build, test). Essential for understanding current task state and accumulated knowledge.',
     {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
+      workingDirectory: workingDirectorySchema,
       id: z.string().describe('The unique identifier of the task to retrieve')
     },
     async ({ workingDirectory, id }) => {
@@ -97,6 +115,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createGetTaskTool(storage);
         return await tool.handler({ id });
       } catch (error) {
+        logger.error('Error in cortex_get_task', error);
         return createErrorResponse(error);
       }
     }
@@ -106,7 +125,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'cortex_update_task',
     'Update task properties including status, details, dependencies, and tags. Use this to mark progress and update task metadata.',
     {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
+      workingDirectory: workingDirectorySchema,
       id: z.string().describe('The unique identifier of the task to update'),
       details: z.string().optional().describe('Updated task description (optional)'),
       parentId: z.string().optional().describe('Updated parent task ID for moving between hierarchy levels (optional)'),
@@ -130,6 +149,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createUpdateTaskTool(storage);
         return await tool.handler({ id, details, parentId, dependsOn, status, tags, actualHours });
       } catch (error) {
+        logger.error('Error in cortex_update_task', error);
         return createErrorResponse(error);
       }
     }
@@ -139,7 +159,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'cortex_delete_task',
     'Delete a task and all its children. Requires confirmation to prevent accidental deletion.',
     {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
+      workingDirectory: workingDirectorySchema,
       id: z.string().describe('The unique identifier of the task to delete'),
       confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
     },
@@ -149,6 +169,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createDeleteTaskTool(storage);
         return await tool.handler({ id, confirm });
       } catch (error) {
+        logger.error('Error in cortex_delete_task', error);
         return createErrorResponse(error);
       }
     }
@@ -158,7 +179,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     'cortex_move_task',
     'Move a task to a different parent in the hierarchy. Set newParentId to move under another task, or leave empty to move to top level.',
     {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
+      workingDirectory: workingDirectorySchema,
       taskId: z.string().describe('The unique identifier of the task to move'),
       newParentId: z.string().optional().describe('The ID of the new parent task (optional - leave empty for top level)')
     },
@@ -168,6 +189,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
         const tool = createMoveTaskTool(storage);
         return await tool.handler({ taskId, newParentId });
       } catch (error) {
+        logger.error('Error in cortex_move_task', error);
         return createErrorResponse(error);
       }
     }
@@ -178,6 +200,11 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
   for (const tool of artifactTools) {
     server.tool(tool.name, tool.description, tool.schema, tool.handler);
   }
+
+  logger.info('MCP server created successfully', { 
+    taskTools: 6, 
+    artifactTools: artifactTools.length 
+  });
 
   return server;
 }

@@ -1,18 +1,23 @@
 import { z } from 'zod';
 import { FileStorage } from '../../storage/file-storage.js';
+import { Storage } from '../../storage/storage.js';
 import { StorageConfig, resolveWorkingDirectory, getWorkingDirectoryDescription } from '../../../../utils/storage-config.js';
-import { createErrorResponse } from '../../../../utils/error-handler.js';
+import { createErrorResponse } from '../../../../utils/response-builder.js';
+import { createLogger } from '../../../../utils/logger.js';
 import { 
   ArtifactPhase, 
+  ArtifactStatus,
   ARTIFACT_PHASES,
   OPERATION_DESCRIPTIONS,
   PHASE_DESCRIPTIONS
 } from '../../models/artifact.js';
 
+const logger = createLogger('artifact-tools');
+
 /**
  * Factory function type for creating storage instances
  */
-type StorageFactory = (workingDirectory: string, config: StorageConfig) => Promise<FileStorage>;
+type StorageFactory = (workingDirectory: string, config: StorageConfig) => Promise<Storage>;
 
 /**
  * MCP tool definition structure

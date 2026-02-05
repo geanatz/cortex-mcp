@@ -15,3 +15,59 @@
  * v8.0.0 - Simplified task status (removed completed field, status only)
  */
 export const CURRENT_STORAGE_VERSION = '8.0.0';
+
+/**
+ * Storage paths configuration
+ */
+export const STORAGE_PATHS = {
+  /** Root directory for cortex data */
+  ROOT_DIR: '.cortex',
+  /** Tasks directory name */
+  TASKS_DIR: 'tasks',
+  /** Task metadata filename */
+  TASK_FILE: 'task.json',
+} as const;
+
+/**
+ * Task numbering configuration
+ */
+export const TASK_NUMBERING = {
+  /** Number of digits for task numbers */
+  DIGITS: 3,
+  /** Pattern for matching task folders */
+  PATTERN: /^\d{3}-/,
+} as const;
+
+/**
+ * File naming constraints
+ */
+export const FILE_NAMING = {
+  /** Maximum length for task slug */
+  MAX_SLUG_LENGTH: 50,
+  /** Maximum length for full task ID */
+  MAX_ID_LENGTH: 100,
+} as const;
+
+/**
+ * Cache configuration defaults
+ */
+export const CACHE_CONFIG = {
+  /** Default TTL in milliseconds */
+  DEFAULT_TTL: 5 * 60 * 1000, // 5 minutes
+  /** Maximum cache entries */
+  MAX_SIZE: 1000,
+} as const;
+
+/**
+ * Validation limits
+ */
+export const VALIDATION_LIMITS = {
+  /** Maximum task details length */
+  MAX_DETAILS_LENGTH: 2000,
+  /** Maximum number of tags per task */
+  MAX_TAGS: 20,
+  /** Maximum tag length */
+  MAX_TAG_LENGTH: 50,
+  /** Maximum number of dependencies */
+  MAX_DEPENDENCIES: 50,
+} as const;
