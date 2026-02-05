@@ -47,10 +47,10 @@ export function createGetTaskTool(storage: Storage) {
 
         // Get related child tasks for summary
         const childTasks = await storage.getTaskChildren(task.id);
-        const completedChildren = childTasks.filter(t => t.completed).length;
+        const doneChildren = childTasks.filter(t => t.status === 'done').length;
 
         const childTaskSummary = childTasks.length > 0
-          ? `${completedChildren}/${childTasks.length} completed`
+          ? `${doneChildren}/${childTasks.length} done`
           : 'None';
 
         // Build artifact status summary
@@ -74,7 +74,7 @@ export function createGetTaskTool(storage: Storage) {
         const taskInfo = `# Task: ${task.id}
 
 ## Metadata
-- **Status:** ${task.status || 'pending'}${task.completed ? ' ✅ (Completed)' : ''}
+- **Status:** ${task.status}
 - **Details:** ${task.details}
 - **Tags:** ${task.tags?.join(', ') || 'None'}
 - **Dependencies:** ${task.dependsOn?.length ? task.dependsOn.join(', ') : 'None'}

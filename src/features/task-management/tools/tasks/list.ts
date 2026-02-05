@@ -12,16 +12,16 @@ import { Task } from '../../models/task.js';
 export function createListTasksTool(storage: Storage) {
   return {
     name: 'list_tasks',
-    description: 'View tasks in hierarchical tree format. Filter by parentId. Use parentId=null for top-level tasks, or specific parentId for subtasks.',
+    description: 'View tasks in hierarchical tree format. Filter by parentId. Use parentId=null for top-level tasks, or specific parentId for subtasks. Use includeDone=false to hide done tasks.',
     inputSchema: {
       parentId: z.string().optional(),
       showHierarchy: z.boolean().optional(),
-      includeCompleted: z.boolean().optional()
+      includeDone: z.boolean().optional()
     },
-    handler: async ({ parentId, showHierarchy = true, includeCompleted = true }: {
+    handler: async ({ parentId, showHierarchy = true, includeDone = true }: {
       parentId?: string;
       showHierarchy?: boolean;
-      includeCompleted?: boolean;
+      includeDone?: boolean;
     }) => {
       try {
         // If parentId is provided, validate parent task exists
@@ -60,13 +60,13 @@ export function createListTasksTool(storage: Storage) {
             return hierarchyList.map(item => {
               const task = item.task;
 
-              // Skip completed tasks if not included
-              if (!includeCompleted && task.completed) {
+              // Skip done tasks if not included
+              if (!includeDone && task.status === 'done') {
                 return '';
               }
 
               const indent = '  '.repeat(baseLevel);
-              const icon = task.completed ? '✅' : '⏳';
+              const icon = task.status === 'done' ? '✅' : '⏳';
               const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
 
               let taskLine = `${indent}${icon} **${task.id}**${statusText}\n`;
@@ -95,7 +95,7 @@ export function createListTasksTool(storage: Storage) {
 
           const hierarchyText = formatTaskHierarchy(hierarchy);
           const totalTasks = countTasksInHierarchy(hierarchy);
-          const completedTasks = countCompletedTasksInHierarchy(hierarchy);
+          const doneTasks = countDoneTasksInHierarchy(hierarchy);
 
           const scopeInfo = parentTask
             ? `Showing hierarchy under "${parentTask.id}"`
@@ -107,7 +107,7 @@ export function createListTasksTool(storage: Storage) {
               text: `🌲 **Task Hierarchy**
 
 ${scopeInfo}
-Total: ${totalTasks} tasks (${completedTasks} completed)
+ Total: ${totalTasks} tasks (${doneTasks} done)
 
 ${hierarchyText}
 
@@ -134,10 +134,10 @@ ${hierarchyText}
             };
           }
 
-          const filteredTasks = includeCompleted ? tasks : tasks.filter(t => !t.completed);
+          const filteredTasks = includeDone ? tasks : tasks.filter(t => t.status !== 'done');
 
           const taskList = filteredTasks.map(task => {
-            const icon = task.completed ? '✅' : '⏳';
+            const icon = task.status === 'done' ? '✅' : '⏳';
             const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
 
             return `${icon} **${task.id}**${statusText}
@@ -147,7 +147,7 @@ ${hierarchyText}
    Created: ${new Date(task.createdAt).toLocaleString()}`;
           }).join('\n\n');
 
-          const completedCount = filteredTasks.filter(t => t.completed).length;
+          const doneCount = filteredTasks.filter(t => t.status === 'done').length;
           const scopeDescription = parentTask
             ? `under "${parentTask.id}"`
             : `at top level`;
@@ -157,7 +157,7 @@ ${hierarchyText}
               type: 'text' as const,
               text: `📋 **Tasks ${scopeDescription}**
 
-Found ${filteredTasks.length} task(s) (${completedCount} completed):
+ Found ${filteredTasks.length} task(s) (${doneCount} done):
 
 ${taskList}
 
@@ -188,11 +188,11 @@ function countTasksInHierarchy(hierarchy: any[]): number {
 }
 
 /**
- * Count completed tasks in hierarchy
+ * Count done tasks in hierarchy
  */
-function countCompletedTasksInHierarchy(hierarchy: any[]): number {
+function countDoneTasksInHierarchy(hierarchy: any[]): number {
   return hierarchy.reduce((count, item) => {
-    const thisCount = item.task.completed ? 1 : 0;
-    return count + thisCount + countCompletedTasksInHierarchy(item.children);
+    const thisCount = item.task.status === 'done' ? 1 : 0;
+    return count + thisCount + countDoneTasksInHierarchy(item.children);
   }, 0);
 }

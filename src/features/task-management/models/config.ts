@@ -12,6 +12,6 @@
 
 /**
  * Current schema version for the task storage format
- * v7.0.0 - Added artifact support for orchestration workflows
+ * v8.0.0 - Simplified task status (removed completed field, status only)
  */
-export const CURRENT_STORAGE_VERSION = '7.0.0';
+export const CURRENT_STORAGE_VERSION = '8.0.0';

@@ -10,16 +10,14 @@ export interface Task {
   details: string;
   /** Reference to parent task ID (null for top-level tasks) */
   parentId?: string;
-  /** Task completion status */
-  completed: boolean;
   /** Timestamp when the task was created */
   createdAt: string;
   /** Timestamp when the task was last updated */
   updatedAt: string;
   /** Task dependencies - IDs of tasks that must be completed before this task */
   dependsOn?: string[];
-  /** Task status beyond just completed (pending, in-progress, blocked, done) */
-  status?: 'pending' | 'in-progress' | 'blocked' | 'done';
+  /** Task status (pending, in_progress, done) */
+  status: 'pending' | 'in_progress' | 'done';
   /** Tags for categorization and filtering */
   tags?: string[];
   /** Actual time spent in hours */
@@ -39,7 +37,7 @@ export interface CreateTaskInput {
   /** Task dependencies - IDs of tasks that must be completed before this task */
   dependsOn?: string[];
   /** Task status (defaults to 'pending') */
-  status?: 'pending' | 'in-progress' | 'blocked' | 'done';
+  status?: 'pending' | 'in_progress' | 'done';
   /** Tags for categorization and filtering */
   tags?: string[];
 }
@@ -52,12 +50,10 @@ export interface UpdateTaskInput {
   details?: string;
   /** Reference to parent task (optional) */
   parentId?: string;
-  /** Task completion status (optional) */
-  completed?: boolean;
   /** Task dependencies - IDs of tasks that must be completed before this task */
   dependsOn?: string[];
   /** Task status */
-  status?: 'pending' | 'in-progress' | 'blocked' | 'done';
+  status?: 'pending' | 'in_progress' | 'done';
   /** Tags for categorization and filtering */
   tags?: string[];
   /** Actual time spent in hours */
@@ -72,5 +68,4 @@ export interface TaskHierarchy {
   children: TaskHierarchy[];
   depth: number;
 }
-
 

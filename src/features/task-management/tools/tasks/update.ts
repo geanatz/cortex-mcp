@@ -11,24 +11,22 @@ import { Storage } from '../../storage/storage.js';
 export function createUpdateTaskTool(storage: Storage) {
   return {
     name: 'update_task',
-    description: 'Update task properties including details, parent relationship (parentId), completion status, dependencies, status, tags, and time tracking. Use parentId to move tasks within the hierarchy.',
+    description: 'Update task properties including details, parent relationship (parentId), dependencies, status, tags, and time tracking. Use parentId to move tasks within the hierarchy.',
     inputSchema: {
       id: z.string(),
       details: z.string().optional(),
       parentId: z.string().optional(),
-      completed: z.boolean().optional(),
       dependsOn: z.array(z.string()).optional(),
-      status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional(),
+      status: z.enum(['pending', 'in_progress', 'done']).optional(),
       tags: z.array(z.string()).optional(),
       actualHours: z.number().min(0).optional()
     },
-    handler: async ({ id, details, parentId, completed, dependsOn, status, tags, actualHours }: {
+    handler: async ({ id, details, parentId, dependsOn, status, tags, actualHours }: {
       id: string;
       details?: string;
       parentId?: string;
-      completed?: boolean;
       dependsOn?: string[];
-      status?: 'pending' | 'in-progress' | 'blocked' | 'done';
+      status?: 'pending' | 'in_progress' | 'done';
       tags?: string[];
       actualHours?: number;
     }) => {
@@ -64,7 +62,7 @@ export function createUpdateTaskTool(storage: Storage) {
           };
         }
 
-        if (details === undefined && parentId === undefined && completed === undefined &&
+        if (details === undefined && parentId === undefined &&
             dependsOn === undefined && status === undefined && tags === undefined &&
             actualHours === undefined) {
           return {
@@ -164,10 +162,6 @@ export function createUpdateTaskTool(storage: Storage) {
           updates.parentId = parentId?.trim() || undefined;
         }
 
-        if (completed !== undefined) {
-          updates.completed = completed;
-        }
-
         if (dependsOn !== undefined) {
           updates.dependsOn = dependsOn;
         }
@@ -203,13 +197,12 @@ export function createUpdateTaskTool(storage: Storage) {
         const changedFields = [];
         if (details !== undefined) changedFields.push('details');
         if (parentId !== undefined) changedFields.push('parent relationship');
-        if (completed !== undefined) changedFields.push('completion status');
         if (dependsOn !== undefined) changedFields.push('dependencies');
         if (status !== undefined) changedFields.push('status');
         if (tags !== undefined) changedFields.push('tags');
         if (actualHours !== undefined) changedFields.push('actual hours');
 
-        const taskStatus = updatedTask.status || (updatedTask.completed ? 'done' : 'pending');
+        const taskStatus = updatedTask.status;
         const levelIndicator = '  '.repeat(taskLevel) + '→';
 
         // Build hierarchy path
@@ -233,7 +226,6 @@ Path: ${hierarchyPath}
 
 📋 **Task Properties:**
 • Status: ${taskStatus}
-• Completed: ${updatedTask.completed ? 'Yes' : 'No'}
 • Tags: ${updatedTask.tags?.join(', ') || 'None'}
 • Dependencies: ${updatedTask.dependsOn?.length ? updatedTask.dependsOn.join(', ') : 'None'}
 • Actual Hours: ${updatedTask.actualHours || 'Not set'}

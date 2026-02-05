@@ -49,13 +49,13 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       parentId: z.string().optional().describe('Filter to tasks under this parent (optional)'),
       showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format (default: true)'),
-      includeCompleted: z.boolean().optional().describe('Include completed tasks in results (default: true)')
+      includeDone: z.boolean().optional().describe('Include done tasks in results (default: true)')
     },
-    async ({ workingDirectory, parentId, showHierarchy, includeCompleted }) => {
+    async ({ workingDirectory, parentId, showHierarchy, includeDone }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createListTasksTool(storage);
-        return await tool.handler({ parentId, showHierarchy, includeCompleted });
+        return await tool.handler({ parentId, showHierarchy, includeDone });
       } catch (error) {
         return createErrorResponse(error);
       }
@@ -70,7 +70,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       details: z.string().describe('Task description - used to generate the task ID (e.g., "Implement authentication" becomes "001-implement-authentication")'),
       parentId: z.string().optional().describe('Parent task ID for creating subtasks (optional - creates top-level task if not specified)'),
       dependsOn: z.array(z.string()).optional().describe('Array of task IDs that must be completed before this task'),
-      status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional().describe('Initial task status (defaults to pending)'),
+      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Initial task status (defaults to pending)'),
       tags: z.array(z.string()).optional().describe('Tags for categorization and filtering')
     },
     async ({ workingDirectory, details, parentId, dependsOn, status, tags }) => {
@@ -109,28 +109,26 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
       id: z.string().describe('The unique identifier of the task to update'),
       details: z.string().optional().describe('Updated task description (optional)'),
-      completed: z.boolean().optional().describe('Mark task as completed (true) or incomplete (false) (optional)'),
       parentId: z.string().optional().describe('Updated parent task ID for moving between hierarchy levels (optional)'),
       dependsOn: z.array(z.string()).optional().describe('Updated array of task IDs that must be completed before this task'),
-      status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional().describe('Updated task status'),
+      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated task status'),
       tags: z.array(z.string()).optional().describe('Updated tags for categorization and filtering'),
       actualHours: z.number().min(0).optional().describe('Actual time spent on the task in hours')
     },
-    async ({ workingDirectory, id, details, completed, parentId, dependsOn, status, tags, actualHours }: {
+    async ({ workingDirectory, id, details, parentId, dependsOn, status, tags, actualHours }: {
       workingDirectory: string;
       id: string;
       details?: string;
-      completed?: boolean;
       parentId?: string;
       dependsOn?: string[];
-      status?: 'pending' | 'in-progress' | 'blocked' | 'done';
+      status?: 'pending' | 'in_progress' | 'done';
       tags?: string[];
       actualHours?: number;
     }) => {
       try {
         const storage = await createStorage(workingDirectory, config);
         const tool = createUpdateTaskTool(storage);
-        return await tool.handler({ id, details, completed, parentId, dependsOn, status, tags, actualHours });
+        return await tool.handler({ id, details, parentId, dependsOn, status, tags, actualHours });
       } catch (error) {
         return createErrorResponse(error);
       }

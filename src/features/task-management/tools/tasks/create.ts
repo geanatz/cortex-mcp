@@ -17,14 +17,14 @@ export function createCreateTaskTool(storage: Storage) {
       details: z.string(),
       parentId: z.string().optional(),
       dependsOn: z.array(z.string()).optional(),
-      status: z.enum(['pending', 'in-progress', 'blocked', 'done']).optional(),
+      status: z.enum(['pending', 'in_progress', 'done']).optional(),
       tags: z.array(z.string()).optional()
     },
     handler: async ({ details, parentId, dependsOn, status, tags }: {
       details: string;
       parentId?: string;
       dependsOn?: string[];
-      status?: 'pending' | 'in-progress' | 'blocked' | 'done';
+      status?: 'pending' | 'in_progress' | 'done';
       tags?: string[];
     }) => {
       try {
@@ -89,7 +89,6 @@ export function createCreateTaskTool(storage: Storage) {
           id: '', // Will be set by storage.createTask based on details
           details: details.trim(),
           parentId: parentId?.trim() || undefined,
-          completed: false,
           createdAt: now,
           updatedAt: now,
           dependsOn: dependsOn || [],
