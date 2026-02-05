@@ -3,7 +3,7 @@ import { FileStorage } from './features/task-management/storage/file-storage.js'
 import { Storage } from './features/task-management/storage/storage.js';
 import { getVersion } from './utils/version.js';
 import { StorageConfig, resolveWorkingDirectory, getWorkingDirectoryDescription } from './utils/storage-config.js';
-import { createErrorResponse, response } from './utils/response-builder.js';
+import { createErrorResponse } from './utils/response-builder.js';
 import { createLogger } from './utils/logger.js';
 import { z } from 'zod';
 

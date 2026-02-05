@@ -80,7 +80,11 @@ function createCreateArtifactTool(
   const baseTool = createArtifactOperationTool(
     phase,
     'create',
-    {} as Storage // We'll provide the actual storage in the handler
+    {} as Storage, // We'll provide the actual storage in the handler
+    async (params: any, storage: Storage) => {
+      // This is a placeholder - the actual implementation is below
+      return { content: [{ type: 'text', text: 'Placeholder' }] };
+    }
   );
 
   // Override the handler to use our specific implementation
@@ -181,7 +185,11 @@ function createUpdateArtifactTool(
   const baseTool = createArtifactOperationTool(
     phase,
     'update',
-    {} as Storage // We'll provide the actual storage in the handler
+    {} as Storage, // We'll provide the actual storage in the handler
+    async (params: any, storage: Storage) => {
+      // This is a placeholder - the actual implementation is below
+      return { content: [{ type: 'text', text: 'Placeholder' }] };
+    }
   );
 
   // Override the handler to use our specific implementation
@@ -281,7 +289,11 @@ function createDeleteArtifactTool(
   const baseTool = createArtifactOperationTool(
     phase,
     'delete',
-    {} as Storage // We'll provide the actual storage in the handler
+    {} as Storage, // We'll provide the actual storage in the handler
+    async (params: any, storage: Storage) => {
+      // This is a placeholder - the actual implementation is below
+      return { content: [{ type: 'text', text: 'Placeholder' }] };
+    }
   );
 
   // Override the handler to use our specific implementation

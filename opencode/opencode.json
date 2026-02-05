@@ -1,0 +1,266 @@
+﻿{
+  "$schema": "https://opencode.ai/config.json",
+  "theme": "opencode",
+  "provider": {
+    "alibaba": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Alibaba",
+      "options": {
+        "apiKey": "USmPHtrg_aNjlseuuPP2lIT1cg5lyQTz67M-CBNBOJpZbyhUSnZNRiiuttz41zwsd4ngPvmH2DQxKdTke_TOhQ",
+        "baseURL": "https://portal.qwen.ai/v1"
+      },
+      "models": {
+        "qwen3-coder-plus": {
+          "name": "Qwen3 Coder"
+        }
+      },
+      "whitelist": [
+        "qwen3-coder-plus"
+      ]
+    },
+    "opencode": {
+      "whitelist": [
+        "big-pickle",
+        "minimax-m2.1-free",
+        "kimi-k2.5-free",
+        "glm-4.7-free",
+        "trinity-large-preview-free"
+      ]
+    },
+    "github-copilot": {
+      "whitelist": [
+        "grok-code-fast-1",
+        "gpt-5-mini",
+        "claude-opus-4.5",
+        "claude-sonnet-4.5",
+        "claude-haiku-4.5",
+        "gemini-3-pro-preview",
+        "gemini-3-flash-preview",
+        "gpt-5.2-codex"
+      ]
+    }
+  },
+  "agent": {
+    // main agents
+    "mentor": {
+      "disable": false,
+      "hidden": false,
+      "color": "#56934f",
+      "mode": "primary",
+      "model": "alibaba/qwen3-coder-plus",
+      "temperature": 1,
+      "top_p": 1,
+      "permission": {
+        // default tools
+        "question": "allow",
+        "bash": "allow",
+        "task": "allow",
+        "skill": "allow",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "edit": "allow",
+        "write": "allow",
+        "webfetch": "allow",
+        "exa*": "allow",
+      }
+    },
+    "general": {
+      "disable": false,
+      "hidden": false,
+      "color": "#869ff3",
+      "mode": "primary",
+      "model": "alibaba/qwen3-coder-plus",
+      "permission": {
+        // default tools
+        "question": "allow",
+        "bash": "allow",
+        "skill": "allow",
+        "read": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "edit": "allow",
+        "write": "allow",
+        "webfetch": "allow",
+        // mcp tool
+        "exa*": "allow",
+        "chrome*": "allow",
+        "cortex*": "allow",
+        "*screenshot": "deny",
+      }
+    },
+    // workflow agent
+    "orchestrate": {
+      "disable": false,
+      "color": "#9447d7",
+      "mode": "primary",
+      "model": "opencode/kimi-k2.5-free",
+      "temperature": 0.4,
+      "top_p": 0.95,
+      "permission": {
+        "question": "allow",
+        "task": "allow",
+        "cortex*task*": "allow",
+      }
+    },
+    // workflow subagents
+    "explore": {
+      "disable": false,
+      "hidden": true,
+      "color": "#ffffff",
+      "mode": "subagent",
+      "model": "alibaba/qwen3-coder-plus",
+      "temperature": 0.4,
+      "top_p": 0.9,
+      "steps": 36,
+      "permission": {
+        "glob": "allow",
+        "list": "allow",
+        "read": "allow",
+        "grep": "allow",
+        "cortex*get_task": "allow",
+        "cortex*explore": "allow",
+      }
+    },
+    "plan": {
+      "disable": false,
+      "hidden": true,
+      "color": "#ffffff",
+      "mode": "subagent",
+      "model": "alibaba/qwen3-coder-plus",
+      "temperature": 0.6,
+      "top_p": 0.9,
+      "steps": 16,
+      "permission": {
+        "glob": "allow",
+        "list": "allow",
+        "read": "allow",
+        "grep": "allow",
+        "cortex*get_task": "allow",
+        "cortex*plan": "allow",
+      }
+    },
+    "build": {
+      "disable": false,
+      "hidden": true,
+      "color": "#ffffff",
+      "mode": "subagent",
+      "model": "alibaba/qwen3-coder-plus",
+      "temperature": 0.2,
+      "top_p": 0.9,
+      "steps": 32,
+      "permission": {
+        "bash": "allow",
+        "glob": "allow",
+        "list": "allow",
+        "read": "allow",
+        "grep": "allow",
+        "write": "allow",
+        "edit": "allow",
+        "cortex*get_task": "allow",
+        "cortex*build": "allow",
+      }
+    },
+    // workflow optional subagents
+    "search": {
+      "disable": false,
+      "hidden": true,
+      "color": "#ffffff",
+      "mode": "subagent",
+      "model": "alibaba/qwen3-coder-plus",
+      "temperature": 0.5,
+      "top_p": 0.9,
+      "steps": 16,
+      "permission": {
+        "glob": "deny",
+        "list": "deny",
+        "read": "deny",
+        "grep": "deny",
+        "write": "deny",
+        "webfetch": "allow",
+        "exa*": "allow",
+        "cortex*get_task": "allow",
+        "cortex*search": "allow",
+      }
+    },
+    "test": {
+      "disable": false,
+      "hidden": true,
+      "color": "#ffffff",
+      "mode": "subagent",
+      "model": "alibaba/qwen3-coder-plus",
+      "temperature": 0.1,
+      "top_p": 0.9,
+      "steps": 16,
+      "permission": {
+        "bash": "allow",
+        "glob": "allow",
+        "list": "allow",
+        "read": "allow",
+        "grep": "allow",
+        "write": "deny",
+        "edit": "deny",
+        "chrome*": "allow",
+        "cortex*get_task": "allow",
+        "cortex*test": "allow",
+        "*screenshot": "deny",
+      }
+    },
+  },
+  "mcp": {
+    "sequential": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    },
+    "chrome": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--headless=true"
+      ]
+    },
+    "cortex": {
+      "type": "local",
+      "enabled": true,
+      "command": [
+        "node",
+        "/home/geanatz/Repos/cortex-mcp/dist/index.js"
+      ],
+    },
+    "exa": {
+      "type": "remote",
+      "enabled": true,
+      "url": "https://mcp.exa.ai/mcp",
+    }
+  },
+  "permission": {
+    // Default tools
+    "question": "deny",
+    "bash": "deny",
+    "task": "deny",
+    "skill": "deny",
+    "todo*": "deny",
+    "glob": "deny",
+    "list": "deny",
+    "read": "deny",
+    "grep": "deny",
+    "write": "deny",
+    "edit": "deny",
+    "codesearch": "deny",
+    "websearch": "deny",
+    "webfetch": "deny",
+    // MCP tools
+    "sequential*": "allow",
+    "chrome*": "deny",
+    "cortex*": "deny",
+    "exa*": "deny"
+  }
+}

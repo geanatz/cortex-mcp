@@ -25,28 +25,14 @@ import { createErrorResponse } from '../../../../utils/response-builder.js';
 export function createTool<TInput extends Record<string, unknown>>(
   config: FactoryConfig<TInput>
 ): ToolDefinition<TInput> {
-  // Apply validation and error handling middleware
-  // We'll create a simple identity function for now since building a dynamic Zod schema
-  // from the JSON schema is complex and may not be needed for all use cases
-  const validatedHandler: McpToolHandler<TInput> = async (input: TInput) => {
-    try {
-      // For now, just pass through to the original handler
-      // In a real implementation, we'd validate against the schema
-      return await config.handler(input);
-    } catch (error) {
-      return withErrorHandling(config.handler)(input);
-    }
-  };
-
+  // Create a handler with error handling
+  const errorHandler = withErrorHandling(config.handler);
+  
   return {
     name: config.name,
     description: config.description,
-    parameters: {
-      type: 'object',
-      properties: config.parameters.properties,
-      required: config.parameters.required,
-    },
-    handler: validatedHandler,
+    parameters: config.parameters,
+    handler: errorHandler,
   };
 }
 
@@ -57,11 +43,13 @@ export function createTool<TInput extends Record<string, unknown>>(
  * @template TInput - The input type for the operation
  * @param operation - The operation type ('create', 'update', 'delete', etc.)
  * @param storage - Storage instance for data operations
+ * @param handler - The handler function to execute the operation
  * @returns A complete tool definition for the task operation
  */
 export function createTaskOperationTool<TInput extends Record<string, unknown>>(
   operation: string,
-  storage: Storage
+  storage: Storage,
+  handler: (input: TInput, storage: Storage) => Promise<McpToolResponse>
 ): ToolDefinition<TInput> {
   // Define parameters based on operation type
   let parameters: {
@@ -154,23 +142,16 @@ export function createTaskOperationTool<TInput extends Record<string, unknown>>(
       };
   }
 
-  // Create a basic handler that includes the storage dependency
-  const handler: (input: TInput) => Promise<McpToolResponse> = async (input: TInput) => {
-    // This is a placeholder - in real implementations, handlers would be passed in
-    // For now we return a generic response indicating the operation would happen
-    return {
-      content: [{
-        type: 'text',
-        text: `Task operation '${operation}' would be performed with storage dependency. Input: ${JSON.stringify(input)}`
-      }]
-    };
+  // Create a handler that wraps the provided handler with storage
+  const wrappedHandler: (input: TInput) => Promise<McpToolResponse> = async (input: TInput) => {
+    return await handler(input, storage);
   };
 
   return createTool<TInput>({
     name: `cortex_${operation}_task`,
     description: `Perform ${operation} operation on a task`,
     parameters,
-    handler,
+    handler: wrappedHandler,
     options: {
       requiresConfirmation: operation.toLowerCase() === 'delete',
       categories: ['tasks'],
@@ -186,12 +167,14 @@ export function createTaskOperationTool<TInput extends Record<string, unknown>>(
  * @param phase - The artifact phase ('explore', 'plan', 'build', etc.)
  * @param operation - The operation type ('create', 'update', 'delete', etc.)
  * @param storage - Storage instance for data operations
+ * @param handler - The handler function to execute the operation
  * @returns A complete tool definition for the artifact operation
  */
 export function createArtifactOperationTool<TInput extends Record<string, unknown>>(
   phase: string,
   operation: string,
-  storage: Storage
+  storage: Storage,
+  handler: (input: TInput, storage: Storage) => Promise<McpToolResponse>
 ): ToolDefinition<TInput> {
   // Define parameters based on phase and operation type
   let parameters: {
@@ -279,23 +262,16 @@ export function createArtifactOperationTool<TInput extends Record<string, unknow
       };
   }
 
-  // Create a basic handler that includes the storage dependency
-  const handler: (input: TInput) => Promise<McpToolResponse> = async (input: TInput) => {
-    // This is a placeholder - in real implementations, handlers would be passed in
-    // For now we return a generic response indicating the operation would happen
-    return {
-      content: [{
-        type: 'text',
-        text: `Artifact operation '${operation}' for phase '${phase}' would be performed with storage dependency. Input: ${JSON.stringify(input)}`
-      }]
-    };
+  // Create a handler that wraps the provided handler with storage
+  const wrappedHandler: (input: TInput) => Promise<McpToolResponse> = async (input: TInput) => {
+    return await handler(input, storage);
   };
 
   return createTool<TInput>({
     name: `cortex_${phase}_${operation}_artifact`,
     description: `Perform ${operation} operation on ${phase} artifact`,
     parameters,
-    handler,
+    handler: wrappedHandler,
     options: {
       requiresConfirmation: operation.toLowerCase() === 'delete',
       categories: ['artifacts', phase],
