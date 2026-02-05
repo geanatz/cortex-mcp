@@ -12,22 +12,31 @@ import {
   PHASE_DESCRIPTIONS
 } from '../../models/artifact.js';
 
+// Import from base abstractions
+import { ToolDefinition } from '../../tools/base/types.js';
+import { createArtifactOperationTool } from '../../tools/base/tool-factory.js';
+import { withErrorHandling } from '../../tools/base/handlers.js';
+import { 
+  workingDirectorySchema, 
+  taskIdSchema, 
+  contentSchema, 
+  artifactStatusSchema 
+} from '../../tools/base/schemas.js';
+
+// Import new types
+import { 
+  ArtifactOperation,
+  CreateArtifactInput,
+  UpdateArtifactInput,
+  DeleteArtifactInput
+} from './types.js';
+
 const logger = createLogger('artifact-tools');
 
 /**
  * Factory function type for creating storage instances
  */
 type StorageFactory = (workingDirectory: string, config: StorageConfig) => Promise<Storage>;
-
-/**
- * MCP tool definition structure
- */
-interface ArtifactTool {
-  name: string;
-  description: string;
-  schema: Record<string, z.ZodType>;
-  handler: (params: Record<string, unknown>) => Promise<{ content: { type: 'text'; text: string }[]; isError?: boolean }>;
-}
 
 /**
  * Create all artifact tools (15 total: create/update/delete × 5 phases)
@@ -42,8 +51,8 @@ interface ArtifactTool {
 export function createArtifactTools(
   config: StorageConfig,
   createStorage: StorageFactory
-): ArtifactTool[] {
-  const tools: ArtifactTool[] = [];
+): ToolDefinition[] {
+  const tools: ToolDefinition[] = [];
 
   for (const phase of ARTIFACT_PHASES) {
     // Create tool
@@ -60,62 +69,51 @@ export function createArtifactTools(
 }
 
 /**
- * Create the "create" artifact tool for a specific phase
+ * Create the "create" artifact tool for a specific phase using base factory
  */
 function createCreateArtifactTool(
   phase: ArtifactPhase,
   config: StorageConfig,
   createStorage: StorageFactory
-): ArtifactTool {
-  return {
-    name: `cortex_create_${phase}`,
-    description: OPERATION_DESCRIPTIONS.create[phase],
-    schema: {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      taskId: z.string().describe('The ID of the task to create the artifact for'),
-      content: z.string().describe(`Markdown content for the ${phase} artifact. ${PHASE_DESCRIPTIONS[phase]}`),
-      status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional()
-        .describe('Status of this phase (defaults to "completed")'),
-      retries: z.number().min(0).optional().describe('Number of retry attempts for this phase'),
-      error: z.string().optional().describe('Error message if status is "failed"')
-    },
-    handler: async (params) => {
-      try {
-        const { workingDirectory, taskId, content, status, retries, error } = params as {
-          workingDirectory: string;
-          taskId: string;
-          content: string;
-          status?: 'pending' | 'in-progress' | 'completed' | 'failed' | 'skipped';
-          retries?: number;
-          error?: string;
-        };
+): ToolDefinition {
+  // Create the base tool using the factory
+  const baseTool = createArtifactOperationTool(
+    phase,
+    'create',
+    {} as Storage // We'll provide the actual storage in the handler
+  );
 
-        if (!taskId || taskId.trim().length === 0) {
-          return {
-            content: [{ type: 'text' as const, text: 'Error: Task ID is required.' }],
-            isError: true
-          };
-        }
+  // Override the handler to use our specific implementation
+  const handler = async (params: any) => {
+    try {
+      const { workingDirectory, taskId, content, status, retries, error } = params;
 
-        if (!content || content.trim().length === 0) {
-          return {
-            content: [{ type: 'text' as const, text: 'Error: Content is required.' }],
-            isError: true
-          };
-        }
-
-        const storage = await createStorage(workingDirectory, config);
-        const artifact = await storage.createArtifact(taskId.trim(), phase, {
-          content: content.trim(),
-          status,
-          retries,
-          error
-        });
-
+      if (!taskId || taskId.trim().length === 0) {
         return {
-          content: [{
-            type: 'text' as const,
-            text: `**${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact created for task "${taskId}"**
+          content: [{ type: 'text' as const, text: 'Error: Task ID is required.' }],
+          isError: true
+        };
+      }
+
+      if (!content || content.trim().length === 0) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Content is required.' }],
+          isError: true
+        };
+      }
+
+      const storage = await createStorage(workingDirectory, config);
+      const artifact = await storage.createArtifact(taskId.trim(), phase, {
+        content: content.trim(),
+        status,
+        retries,
+        error
+      });
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `**${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact created for task "${taskId}"**
 
 **Phase:** ${artifact.metadata.phase}
 **Status:** ${artifact.metadata.status}
@@ -124,152 +122,237 @@ function createCreateArtifactTool(
 ---
 
 ${artifact.content.length > 500 ? artifact.content.substring(0, 500) + '...\n\n*(truncated - use cortex_get_task to see full content)*' : artifact.content}`
-          }]
-        };
-      } catch (err) {
-        return createErrorResponse(err);
-      }
+        }]
+      };
+    } catch (err) {
+      return createErrorResponse(err);
     }
+  };
+
+  // Return the tool with the overridden handler and proper name
+  return {
+    name: `cortex_create_${phase}`,
+    description: OPERATION_DESCRIPTIONS.create[phase],
+    parameters: {
+      type: 'object',
+      properties: {
+        workingDirectory: {
+          type: 'string',
+          description: getWorkingDirectoryDescription(config)
+        },
+        taskId: {
+          type: 'string',
+          description: 'The ID of the task to create the artifact for'
+        },
+        content: {
+          type: 'string',
+          description: `Markdown content for the ${phase} artifact. ${PHASE_DESCRIPTIONS[phase]}`
+        },
+        status: {
+          type: 'string',
+          enum: ['pending', 'in-progress', 'completed', 'failed', 'skipped'],
+          description: 'Status of this phase (defaults to "completed")'
+        },
+        retries: {
+          type: 'number',
+          minimum: 0,
+          description: 'Number of retry attempts for this phase'
+        },
+        error: {
+          type: 'string',
+          description: 'Error message if status is "failed"'
+        }
+      },
+      required: ['workingDirectory', 'taskId', 'content']
+    },
+    handler: withErrorHandling(handler)
   };
 }
 
 /**
- * Create the "update" artifact tool for a specific phase
+ * Create the "update" artifact tool for a specific phase using base factory
  */
 function createUpdateArtifactTool(
   phase: ArtifactPhase,
   config: StorageConfig,
   createStorage: StorageFactory
-): ArtifactTool {
-  return {
-    name: `cortex_update_${phase}`,
-    description: OPERATION_DESCRIPTIONS.update[phase],
-    schema: {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      taskId: z.string().describe('The ID of the task to update the artifact for'),
-      content: z.string().optional().describe(`Updated markdown content for the ${phase} artifact`),
-      status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional()
-        .describe('Updated status of this phase'),
-      retries: z.number().min(0).optional().describe('Updated number of retry attempts'),
-      error: z.string().optional().describe('Updated error message')
-    },
-    handler: async (params) => {
-      try {
-        const { workingDirectory, taskId, content, status, retries, error } = params as {
-          workingDirectory: string;
-          taskId: string;
-          content?: string;
-          status?: 'pending' | 'in-progress' | 'completed' | 'failed' | 'skipped';
-          retries?: number;
-          error?: string;
+): ToolDefinition {
+  // Create the base tool using the factory
+  const baseTool = createArtifactOperationTool(
+    phase,
+    'update',
+    {} as Storage // We'll provide the actual storage in the handler
+  );
+
+  // Override the handler to use our specific implementation
+  const handler = async (params: any) => {
+    try {
+      const { workingDirectory, taskId, content, status, retries, error } = params;
+
+      if (!taskId || taskId.trim().length === 0) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Task ID is required.' }],
+          isError: true
         };
+      }
 
-        if (!taskId || taskId.trim().length === 0) {
-          return {
-            content: [{ type: 'text' as const, text: 'Error: Task ID is required.' }],
-            isError: true
-          };
-        }
+      const storage = await createStorage(workingDirectory, config);
+      const artifact = await storage.updateArtifact(taskId.trim(), phase, {
+        content: content?.trim(),
+        status,
+        retries,
+        error
+      });
 
-        const storage = await createStorage(workingDirectory, config);
-        const artifact = await storage.updateArtifact(taskId.trim(), phase, {
-          content: content?.trim(),
-          status,
-          retries,
-          error
-        });
-
-        if (!artifact) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: ${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact not found for task "${taskId}". Use cortex_create_${phase} to create it first.`
-            }],
-            isError: true
-          };
-        }
-
+      if (!artifact) {
         return {
           content: [{
             type: 'text' as const,
-            text: `**${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact updated for task "${taskId}"**
+            text: `Error: ${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact not found for task "${taskId}". Use cortex_create_${phase} to create it first.`
+          }],
+          isError: true
+        };
+      }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `**${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact updated for task "${taskId}"**
 
 **Phase:** ${artifact.metadata.phase}
 **Status:** ${artifact.metadata.status}
 **Updated:** ${new Date(artifact.metadata.updatedAt).toLocaleString()}${artifact.metadata.retries !== undefined ? `\n**Retries:** ${artifact.metadata.retries}` : ''}${artifact.metadata.error ? `\n**Error:** ${artifact.metadata.error}` : ''}`
-          }]
-        };
-      } catch (err) {
-        return createErrorResponse(err);
-      }
+        }]
+      };
+    } catch (err) {
+      return createErrorResponse(err);
     }
+  };
+
+  // Return the tool with the overridden handler and proper name
+  return {
+    name: `cortex_update_${phase}`,
+    description: OPERATION_DESCRIPTIONS.update[phase],
+    parameters: {
+      type: 'object',
+      properties: {
+        workingDirectory: {
+          type: 'string',
+          description: getWorkingDirectoryDescription(config)
+        },
+        taskId: {
+          type: 'string',
+          description: 'The ID of the task to update the artifact for'
+        },
+        content: {
+          type: 'string',
+          description: `Updated markdown content for the ${phase} artifact`
+        },
+        status: {
+          type: 'string',
+          enum: ['pending', 'in-progress', 'completed', 'failed', 'skipped'],
+          description: 'Updated status of this phase'
+        },
+        retries: {
+          type: 'number',
+          minimum: 0,
+          description: 'Updated number of retry attempts'
+        },
+        error: {
+          type: 'string',
+          description: 'Updated error message'
+        }
+      },
+      required: ['workingDirectory', 'taskId']
+    },
+    handler: withErrorHandling(handler)
   };
 }
 
 /**
- * Create the "delete" artifact tool for a specific phase
+ * Create the "delete" artifact tool for a specific phase using base factory
  */
 function createDeleteArtifactTool(
   phase: ArtifactPhase,
   config: StorageConfig,
   createStorage: StorageFactory
-): ArtifactTool {
-  return {
-    name: `cortex_delete_${phase}`,
-    description: OPERATION_DESCRIPTIONS.delete[phase],
-    schema: {
-      workingDirectory: z.string().describe(getWorkingDirectoryDescription(config)),
-      taskId: z.string().describe('The ID of the task to delete the artifact from'),
-      confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
-    },
-    handler: async (params) => {
-      try {
-        const { workingDirectory, taskId, confirm } = params as {
-          workingDirectory: string;
-          taskId: string;
-          confirm: boolean;
+): ToolDefinition {
+  // Create the base tool using the factory
+  const baseTool = createArtifactOperationTool(
+    phase,
+    'delete',
+    {} as Storage // We'll provide the actual storage in the handler
+  );
+
+  // Override the handler to use our specific implementation
+  const handler = async (params: any) => {
+    try {
+      const { workingDirectory, taskId, confirm } = params;
+
+      if (!taskId || taskId.trim().length === 0) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Task ID is required.' }],
+          isError: true
         };
+      }
 
-        if (!taskId || taskId.trim().length === 0) {
-          return {
-            content: [{ type: 'text' as const, text: 'Error: Task ID is required.' }],
-            isError: true
-          };
-        }
-
-        if (!confirm) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: Deletion not confirmed. Set confirm=true to delete the ${phase} artifact.`
-            }],
-            isError: true
-          };
-        }
-
-        const storage = await createStorage(workingDirectory, config);
-        const deleted = await storage.deleteArtifact(taskId.trim(), phase);
-
-        if (!deleted) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact not found for task "${taskId}". Nothing to delete.`
-            }]
-          };
-        }
-
+      if (!confirm) {
         return {
           content: [{
             type: 'text' as const,
-            text: `**${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact deleted from task "${taskId}"**
+            text: `Error: Deletion not confirmed. Set confirm=true to delete the ${phase} artifact.`
+          }],
+          isError: true
+        };
+      }
 
-The ${phase} phase has been reset and can be re-run.`
+      const storage = await createStorage(workingDirectory, config);
+      const deleted = await storage.deleteArtifact(taskId.trim(), phase);
+
+      if (!deleted) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact not found for task "${taskId}". Nothing to delete.`
           }]
         };
-      } catch (err) {
-        return createErrorResponse(err);
       }
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: `**${phase.charAt(0).toUpperCase() + phase.slice(1)} artifact deleted from task "${taskId}"**
+
+The ${phase} phase has been reset and can be re-run.`
+        }]
+      };
+    } catch (err) {
+      return createErrorResponse(err);
     }
+  };
+
+  // Return the tool with the overridden handler and proper name
+  return {
+    name: `cortex_delete_${phase}`,
+    description: OPERATION_DESCRIPTIONS.delete[phase],
+    parameters: {
+      type: 'object',
+      properties: {
+        workingDirectory: {
+          type: 'string',
+          description: getWorkingDirectoryDescription(config)
+        },
+        taskId: {
+          type: 'string',
+          description: 'The ID of the task to delete the artifact from'
+        },
+        confirm: {
+          type: 'boolean',
+          description: 'Must be set to true to confirm deletion (safety measure)'
+        }
+      },
+      required: ['workingDirectory', 'taskId', 'confirm']
+    },
+    handler: withErrorHandling(handler)
   };
 }

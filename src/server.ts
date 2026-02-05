@@ -8,14 +8,7 @@ import { createLogger } from './utils/logger.js';
 import { z } from 'zod';
 
 // Task tools
-import { createListTasksTool } from './features/task-management/tools/tasks/list.js';
-import { createCreateTaskTool } from './features/task-management/tools/tasks/create.js';
-import { createGetTaskTool } from './features/task-management/tools/tasks/get.js';
-import { createUpdateTaskTool } from './features/task-management/tools/tasks/update.js';
-import { createDeleteTaskTool } from './features/task-management/tools/tasks/delete.js';
-import { createMoveTaskTool } from './features/task-management/tools/tasks/move.js';
-
-// Artifact tools
+import { createTaskTools } from './features/task-management/tools/tasks/index.js';
 import { createArtifactTools } from './features/task-management/tools/artifacts/index.js';
 
 const logger = createLogger('server');
@@ -57,7 +50,31 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
   // Common schema for working directory
   const workingDirectorySchema = z.string().describe(getWorkingDirectoryDescription(config));
 
-  // Register task management tools
+// Register task management tools using factory
+  // Create all task tools using factory and register them individually
+  // We'll create each tool separately to avoid type conflicts
+
+  // Helper function to create and execute a specific task tool
+  async function executeTaskTool<T>(
+    workingDirectory: string,
+    config: StorageConfig,
+    toolName: string,
+    params: T
+  ) {
+    try {
+      const storage = await createStorage(workingDirectory, config);
+      const tools = createTaskTools(storage);
+      const tool = tools.find(t => t.name === toolName);
+      if (!tool) {
+        throw new Error(`Tool ${toolName} not found`);
+      }
+      return await (tool.handler as any)(params);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // List tasks tool
   server.tool(
     'cortex_list_tasks',
     'List all tasks with hierarchical display. Filter by parentId for subtrees. Perfect for understanding current workflow state and task organization.',
@@ -69,9 +86,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     },
     async ({ workingDirectory, parentId, showHierarchy, includeDone }) => {
       try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createListTasksTool(storage);
-        return await tool.handler({ parentId, showHierarchy, includeDone });
+        return await executeTaskTool(workingDirectory, config, 'list_tasks', { parentId, showHierarchy, includeDone });
       } catch (error) {
         logger.error('Error in cortex_list_tasks', error);
         return createErrorResponse(error);
@@ -79,6 +94,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     }
   );
 
+  // Create task tool
   server.tool(
     'cortex_create_task',
     'Create a new task for the orchestration workflow. Task ID is auto-generated from details. Use parentId to create subtasks for hierarchical organization.',
@@ -92,9 +108,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     },
     async ({ workingDirectory, details, parentId, dependsOn, status, tags }) => {
       try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createCreateTaskTool(storage);
-        return await tool.handler({ details, parentId, dependsOn, status, tags });
+        return await executeTaskTool(workingDirectory, config, 'create_task', { details, parentId, dependsOn, status, tags });
       } catch (error) {
         logger.error('Error in cortex_create_task', error);
         return createErrorResponse(error);
@@ -102,6 +116,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     }
   );
 
+  // Get task tool
   server.tool(
     'cortex_get_task',
     'Retrieve complete task details including all phase artifacts (explore, search, plan, build, test). Essential for understanding current task state and accumulated knowledge.',
@@ -111,9 +126,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     },
     async ({ workingDirectory, id }) => {
       try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createGetTaskTool(storage);
-        return await tool.handler({ id });
+        return await executeTaskTool(workingDirectory, config, 'get_task', { id });
       } catch (error) {
         logger.error('Error in cortex_get_task', error);
         return createErrorResponse(error);
@@ -121,6 +134,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     }
   );
 
+  // Update task tool
   server.tool(
     'cortex_update_task',
     'Update task properties including status, details, dependencies, and tags. Use this to mark progress and update task metadata.',
@@ -145,9 +159,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
       actualHours?: number;
     }) => {
       try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createUpdateTaskTool(storage);
-        return await tool.handler({ id, details, parentId, dependsOn, status, tags, actualHours });
+        return await executeTaskTool(workingDirectory, config, 'update_task', { id, details, parentId, dependsOn, status, tags, actualHours });
       } catch (error) {
         logger.error('Error in cortex_update_task', error);
         return createErrorResponse(error);
@@ -155,6 +167,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     }
   );
 
+  // Delete task tool
   server.tool(
     'cortex_delete_task',
     'Delete a task and all its children. Requires confirmation to prevent accidental deletion.',
@@ -165,9 +178,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     },
     async ({ workingDirectory, id, confirm }) => {
       try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createDeleteTaskTool(storage);
-        return await tool.handler({ id, confirm });
+        return await executeTaskTool(workingDirectory, config, 'delete_task', { id, confirm });
       } catch (error) {
         logger.error('Error in cortex_delete_task', error);
         return createErrorResponse(error);
@@ -175,6 +186,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     }
   );
 
+  // Move task tool
   server.tool(
     'cortex_move_task',
     'Move a task to a different parent in the hierarchy. Set newParentId to move under another task, or leave empty to move to top level.',
@@ -185,9 +197,7 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     },
     async ({ workingDirectory, taskId, newParentId }: { workingDirectory: string; taskId: string; newParentId?: string }) => {
       try {
-        const storage = await createStorage(workingDirectory, config);
-        const tool = createMoveTaskTool(storage);
-        return await tool.handler({ taskId, newParentId });
+        return await executeTaskTool(workingDirectory, config, 'move_task', { taskId, newParentId });
       } catch (error) {
         logger.error('Error in cortex_move_task', error);
         return createErrorResponse(error);
@@ -195,10 +205,12 @@ export async function createServer(config: StorageConfig = { useGlobalDirectory:
     }
   );
 
+  
+
   // Register artifact tools (15 tools: create/update/delete for each phase)
   const artifactTools = createArtifactTools(config, createStorage);
   for (const tool of artifactTools) {
-    server.tool(tool.name, tool.description, tool.schema, tool.handler);
+    server.tool(tool.name, tool.description, tool.parameters, tool.handler);
   }
 
   logger.info('MCP server created successfully', { 

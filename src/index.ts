@@ -41,16 +41,14 @@ async function main() {
 
     logger.info('📋 Task Management: list, create, get, update, delete, move');
     logger.info('🧠 Artifact Support: explore, search, plan, build, test phases');
-    logger.info('💡 Use cortex_list_tasks to get started!');
-  } catch (error) {
-    logger.error('❌ Failed to start MCP server', error);
-    process.exit(1);
-  }
-}
-  }
-}
+logger.info('💡 Use cortex_list_tasks to get started!');
+   } catch (error) {
+     logger.error('❌ Failed to start MCP server', error);
+     process.exit(1);
+   }
+ }
 
-// Handle graceful shutdown
+ // Handle graceful shutdown
 process.on('SIGINT', () => {
   logger.info('👋 Shutting down MCP server...');
   process.exit(0);
