@@ -8,7 +8,7 @@ tools:
   - read
   - glob
   - grep
-  
+
   - write
   - edit
 
@@ -73,11 +73,3 @@ tools:
   - chrome_take_snapshot
   - chrome_upload_file
   - chrome_wait_for
-
-  # Legacy
-  - cortex_migrate_subtasks
-  - cortex_list_subtasks
-  - cortex_create_subtask
-  - cortex_get_subtask
-  - cortex_update_subtask
-  - cortex_delete_subtask

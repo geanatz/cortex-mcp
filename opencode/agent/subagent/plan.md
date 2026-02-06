@@ -22,7 +22,7 @@ Create a minimal, focused implementation blueprint for the build phase.
 
 **If technology is unknown:**
 ```
-cortex_create_plan(
+create_plan(
   ...,
   status="failed",
   error="Technology not specified - cannot plan"
@@ -33,23 +33,23 @@ cortex_create_plan(
 
 | Tool | Purpose |
 |------|---------|
-| `cortex_get_task` | Read task and prior artifacts |
-| `cortex_create_plan` | Save your plan |
+| `get_task` | Read task and prior artifacts |
+| `create_plan` | Save your plan |
 | `read`, `glob`, `grep` | Reference current codebase if needed |
 
 # Process
 
 ## 1. Read Task
 ```
-cortex_get_task(workingDirectory="/path/to/project", id="{taskId}")
+get_task(workingDirectory="/path/to/project", id="{taskId}")
 ```
 
 ## 2. Verify Technology
 Check these sources in order:
-1. Task details → "Create a Node.js CLI" → ✅ Use Node.js
-2. Explore findings → Found package.json → ✅ Use JavaScript
-3. Search recommendations → "Use Python for this" → ✅ Use Python
-4. None of above → ❌ STOP, cannot plan
+1. Task details → "Create a Node.js CLI" → Use Node.js
+2. Explore findings → Found package.json → Use JavaScript
+3. Search recommendations → "Use Python for this" → Use Python
+4. None of above → STOP, cannot plan
 
 ## 3. Design Solution
 1. What exactly needs to change?
@@ -65,7 +65,7 @@ Check these sources in order:
 ## 5. Save Artifact
 
 ```
-cortex_create_plan(
+create_plan(
   workingDirectory="/path/to/project",
   taskId="{taskId}",
   content="[see template below]",
@@ -130,7 +130,7 @@ Verifies: [what it tests]
 
 If planning fails:
 ```
-cortex_create_plan(
+create_plan(
   ...,
   status="failed",
   error="Brief description"

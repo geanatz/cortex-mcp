@@ -6,7 +6,7 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Alibaba",
       "options": {
-        "apiKey": "USmPHtrg_aNjlseuuPP2lIT1cg5lyQTz67M-CBNBOJpZbyhUSnZNRiiuttz41zwsd4ngPvmH2DQxKdTke_TOhQ",
+        "apiKey": "wQc1edMxB6iwpoRY7SVuiW8hMRwAq1fO2rlhxewevK2H3jvnAgWv1xss-Yon-Lj59uyFg5OGCj6nW1mZMPL3Kw",
         "baseURL": "https://portal.qwen.ai/v1"
       },
       "models": {
@@ -23,25 +23,19 @@
         "big-pickle",
         "minimax-m2.1-free",
         "kimi-k2.5-free",
-        "glm-4.7-free",
-        "trinity-large-preview-free"
+        "glm-4.7-free"
       ]
     },
     "github-copilot": {
       "whitelist": [
-        "grok-code-fast-1",
-        "gpt-5-mini",
-        "claude-opus-4.5",
+        "claude-opus-4.6",
         "claude-sonnet-4.5",
         "claude-haiku-4.5",
-        "gemini-3-pro-preview",
-        "gemini-3-flash-preview",
         "gpt-5.2-codex"
       ]
     }
   },
   "agent": {
-    // main agents
     "mentor": {
       "disable": false,
       "hidden": false,
@@ -51,7 +45,6 @@
       "temperature": 1,
       "top_p": 1,
       "permission": {
-        // default tools
         "question": "allow",
         "bash": "allow",
         "task": "allow",
@@ -62,7 +55,7 @@
         "edit": "allow",
         "write": "allow",
         "webfetch": "allow",
-        "exa*": "allow",
+        "exa*": "allow"
       }
     },
     "general": {
@@ -72,7 +65,6 @@
       "mode": "primary",
       "model": "alibaba/qwen3-coder-plus",
       "permission": {
-        // default tools
         "question": "allow",
         "bash": "allow",
         "skill": "allow",
@@ -82,14 +74,12 @@
         "edit": "allow",
         "write": "allow",
         "webfetch": "allow",
-        // mcp tool
         "exa*": "allow",
         "chrome*": "allow",
         "cortex*": "allow",
-        "*screenshot": "deny",
+        "*screenshot": "deny"
       }
     },
-    // workflow agent
     "orchestrate": {
       "disable": false,
       "color": "#9447d7",
@@ -100,10 +90,9 @@
       "permission": {
         "question": "allow",
         "task": "allow",
-        "cortex*task*": "allow",
+        "cortex*": "allow"
       }
     },
-    // workflow subagents
     "explore": {
       "disable": false,
       "hidden": true,
@@ -115,11 +104,10 @@
       "steps": 36,
       "permission": {
         "glob": "allow",
-        "list": "allow",
         "read": "allow",
         "grep": "allow",
         "cortex*get_task": "allow",
-        "cortex*explore": "allow",
+        "cortex*explore": "allow"
       }
     },
     "plan": {
@@ -133,11 +121,10 @@
       "steps": 16,
       "permission": {
         "glob": "allow",
-        "list": "allow",
         "read": "allow",
         "grep": "allow",
         "cortex*get_task": "allow",
-        "cortex*plan": "allow",
+        "cortex*plan": "allow"
       }
     },
     "build": {
@@ -152,16 +139,14 @@
       "permission": {
         "bash": "allow",
         "glob": "allow",
-        "list": "allow",
         "read": "allow",
         "grep": "allow",
         "write": "allow",
         "edit": "allow",
         "cortex*get_task": "allow",
-        "cortex*build": "allow",
+        "cortex*build": "allow"
       }
     },
-    // workflow optional subagents
     "search": {
       "disable": false,
       "hidden": true,
@@ -180,7 +165,7 @@
         "webfetch": "allow",
         "exa*": "allow",
         "cortex*get_task": "allow",
-        "cortex*search": "allow",
+        "cortex*search": "allow"
       }
     },
     "test": {
@@ -195,7 +180,6 @@
       "permission": {
         "bash": "allow",
         "glob": "allow",
-        "list": "allow",
         "read": "allow",
         "grep": "allow",
         "write": "deny",
@@ -203,9 +187,9 @@
         "chrome*": "allow",
         "cortex*get_task": "allow",
         "cortex*test": "allow",
-        "*screenshot": "deny",
+        "*screenshot": "deny"
       }
-    },
+    }
   },
   "mcp": {
     "sequential": {
@@ -233,23 +217,21 @@
       "command": [
         "node",
         "/home/geanatz/Repos/cortex-mcp/dist/index.js"
-      ],
+      ]
     },
     "exa": {
       "type": "remote",
       "enabled": true,
-      "url": "https://mcp.exa.ai/mcp",
+      "url": "https://mcp.exa.ai/mcp"
     }
   },
   "permission": {
-    // Default tools
     "question": "deny",
     "bash": "deny",
     "task": "deny",
     "skill": "deny",
     "todo*": "deny",
     "glob": "deny",
-    "list": "deny",
     "read": "deny",
     "grep": "deny",
     "write": "deny",
@@ -257,7 +239,6 @@
     "codesearch": "deny",
     "websearch": "deny",
     "webfetch": "deny",
-    // MCP tools
     "sequential*": "allow",
     "chrome*": "deny",
     "cortex*": "deny",

@@ -17,8 +17,8 @@ Gather technical evidence from external sources for unknowns identified by explo
 
 | Tool | Purpose |
 |------|---------|
-| `cortex_get_task` | Read task and explore artifact |
-| `cortex_create_search` | Save your findings |
+| `get_task` | Read task and explore artifact |
+| `create_search` | Save your findings |
 | `exa_web_search_exa` | Search the web |
 | `exa_get_code_context_exa` | Find code examples and API docs |
 | `webfetch` | Fetch specific documentation pages |
@@ -27,7 +27,7 @@ Gather technical evidence from external sources for unknowns identified by explo
 
 ## 1. Read Task
 ```
-cortex_get_task(workingDirectory="/path/to/project", id="{taskId}")
+get_task(workingDirectory="/path/to/project", id="{taskId}")
 ```
 Extract the "Unknowns" section from explore artifact.
 
@@ -47,7 +47,7 @@ For each question:
 ## 4. Save Artifact
 
 ```
-cortex_create_search(
+create_search(
   workingDirectory="/path/to/project",
   taskId="{taskId}",
   content="[see template below]",
@@ -98,7 +98,7 @@ Based on explore unknowns:
 
 If research fails:
 ```
-cortex_create_search(
+create_search(
   ...,
   status="failed",
   error="Brief description"

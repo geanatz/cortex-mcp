@@ -3,18 +3,8 @@ import { Storage } from '../../storage/storage.js';
 import { Task, TaskHierarchy } from '../../models/task.js';
 import { ARTIFACT_PHASES, ArtifactPhase, Artifact } from '../../models/artifact.js';
 import { ToolDefinition } from '../base/types.js';
-import { createTaskOperationTool } from '../base/tool-factory.js';
-import { withErrorHandling, withValidationAndErrorHandling } from '../base/handlers.js';
-import { 
-  workingDirectorySchema, 
-  taskIdSchema,
-  createWorkingDirectoryParam,
-  createTaskIdParam,
-  createParentIdParam,
-  createStatusParam,
-  createTagsParam,
-  createConfirmParam
-} from '../base/schemas.js';
+import { withValidationAndErrorHandling } from '../base/handlers.js';
+import { workingDirectorySchema, taskIdSchema } from '../base/schemas.js';
 
 // Define custom schemas for task-specific validation
 const createTaskSchema = z.object({
@@ -234,7 +224,7 @@ export function createGetTaskTool(storage: Storage) {
         return {
           content: [{
             type: 'text' as const,
-            text: `Error: Task with ID "${taskId}" not found. Use cortex_list_tasks to see all available tasks.`
+            text: `Error: Task with ID "${taskId}" not found. Use list_tasks to see all available tasks.`
           }],
           isError: true
         };
@@ -305,7 +295,7 @@ export function createGetTaskTool(storage: Storage) {
   };
 
   return {
-    name: 'cortex_get_task',
+    name: 'get_task',
     description: 'Get detailed information about a specific task including all phase artifacts (explore, search, plan, build, test). Essential for understanding current task state and accumulated knowledge.',
     parameters: {
       type: 'object',

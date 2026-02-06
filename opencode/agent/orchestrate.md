@@ -25,18 +25,18 @@ Each subagent has a strict role:
 - **Test**: ONLY verifies — reports issues, doesn't fix them
 
 ## Test Verdict Interpretation
-- ✅ PASS → Proceed to complete
-- ❌ FAIL → Re-invoke build to fix, then re-test
-- "PASS (with issues)" → Treat as FAIL
+- PASS → Proceed to complete
+- WARNING → Proceed to complete (log warnings for review)
+- FAIL → Re-invoke build to fix, then re-test
 
 # Tools
 
 | Tool | Purpose |
 |------|---------|
-| `cortex_create_task` | Create task |
-| `cortex_get_task` | Read task and artifacts (USE AFTER EVERY SUBAGENT) |
-| `cortex_update_task` | Update status |
-| `cortex_delete_*` | Delete artifacts for retry |
+| `create_task` | Create task |
+| `get_task` | Read task and artifacts (USE AFTER EVERY SUBAGENT) |
+| `update_task` | Update status |
+| `delete_*` | Delete artifacts for retry |
 | `task` | Invoke subagents |
 | `question` | Ask user for clarification |
 
@@ -45,14 +45,14 @@ Each subagent has a strict role:
 ## 1. Create Task
 
 ```
-cortex_create_task(
+create_task(
   workingDirectory="/path/to/project",
   details="Goal INCLUDING language/framework requirements"
 )
 ```
 
 ```
-cortex_update_task(id="{taskId}", status="in-progress")
+update_task(workingDirectory="/path/to/project", taskId="{taskId}", status="in_progress")
 ```
 
 ## 2. Explore Phase
@@ -131,7 +131,17 @@ Document every file modified."
 - Changes match plan steps
 - NOT "already implemented" without actual changes
 
-## 6. Test Phase (if plan has test commands)
+## 6. Test Phase (Optional)
+
+**Invoke if:**
+- Plan includes test commands
+- Task involves user-facing functionality
+- Changes affect critical logic
+
+**Skip if:**
+- No test commands in plan
+- Pure refactoring with type-check passing
+- Documentation-only changes
 
 ```
 task(
@@ -142,25 +152,26 @@ CRITICAL: ONLY test, DO NOT fix issues."
 ```
 
 **Validate and act:**
-- ✅ PASS → Complete task
-- ❌ FAIL → Delete build artifact, re-invoke build with issues, re-test
+- PASS → Complete task
+- WARNING → Complete task (log warnings for user awareness)
+- FAIL → Delete build artifact, re-invoke build with issues, re-test
 
 ## 7. Complete Task
 
-Only when ALL phases pass:
+Only when ALL required phases pass:
 
 ```
-cortex_update_task(
-  id="{taskId}",
-  status="done",
-  completed=true
+update_task(
+  workingDirectory="/path/to/project",
+  taskId="{taskId}",
+  status="done"
 )
 ```
 
 # Retry Protocol
 
 If a phase fails validation:
-1. Delete artifact: `cortex_delete_{phase}(taskId, confirm=true)`
+1. Delete artifact: `delete_{phase}(taskId, confirm=true)`
 2. Re-invoke with stricter prompt
 3. Max 3 retries → ask user for help via `question` tool
 
@@ -177,10 +188,11 @@ If a phase fails validation:
 - [ ] Concrete steps with file paths
 
 ## After Build
-- [ ] Files actually modified
-- [ ] Changes match plan
+- [ ] Files modified OR "no changes needed" with valid justification
+- [ ] Changes match plan (if changes made)
 - [ ] Related comments updated (for semantic changes)
 
 ## After Test
-- [ ] PASS or FAIL only (no "PASS with issues")
+- [ ] Verdict is PASS, WARNING, or FAIL
+- [ ] Warnings documented if WARNING
 - [ ] Issues documented if FAIL

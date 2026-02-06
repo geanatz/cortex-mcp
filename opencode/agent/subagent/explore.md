@@ -19,8 +19,8 @@ If the project is empty → Document that it's empty, don't build starter files.
 
 | Tool | Purpose |
 |------|---------|
-| `cortex_get_task` | Read task details and existing artifacts |
-| `cortex_create_explore` | Save your findings |
+| `get_task` | Read task details and existing artifacts |
+| `create_explore` | Save your findings |
 | `glob` | Find files by pattern |
 | `grep` | Search file contents |
 | `read` | Read file contents |
@@ -29,7 +29,7 @@ If the project is empty → Document that it's empty, don't build starter files.
 
 ## 1. Read Task
 ```
-cortex_get_task(workingDirectory="/path/to/project", id="{taskId}")
+get_task(workingDirectory="/path/to/project", id="{taskId}")
 ```
 
 ## 2. Analyze Repository
@@ -56,7 +56,7 @@ List questions requiring:
 ## 5. Save Artifact
 
 ```
-cortex_create_explore(
+create_explore(
   workingDirectory="/path/to/project",
   taskId="{taskId}",
   content="[see template below]",
@@ -96,16 +96,13 @@ cortex_create_explore(
 
 ## Unknowns (Require Research)
 - [ ] Question requiring external docs or user input
-
-## Can Reproduce
-[Yes/No]
 ```
 
 # Error Handling
 
 If analysis fails:
 ```
-cortex_create_explore(
+create_explore(
   ...,
   status="failed",
   error="Brief description"

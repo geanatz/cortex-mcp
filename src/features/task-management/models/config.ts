@@ -58,16 +58,3 @@ export const CACHE_CONFIG = {
   MAX_SIZE: 1000,
 } as const;
 
-/**
- * Validation limits
- */
-export const VALIDATION_LIMITS = {
-  /** Maximum task details length */
-  MAX_DETAILS_LENGTH: 2000,
-  /** Maximum number of tags per task */
-  MAX_TAGS: 20,
-  /** Maximum tag length */
-  MAX_TAG_LENGTH: 50,
-  /** Maximum number of dependencies */
-  MAX_DEPENDENCIES: 50,
-} as const;

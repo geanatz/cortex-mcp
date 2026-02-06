@@ -114,11 +114,6 @@ export interface UpdateArtifactInput {
 }
 
 /**
- * Legacy alias for backwards compatibility
- */
-export type ArtifactInput = CreateArtifactInput;
-
-/**
  * Get the filename for an artifact phase
  */
 export function getArtifactFilename(phase: ArtifactPhase): string {

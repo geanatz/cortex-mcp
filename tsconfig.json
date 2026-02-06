@@ -13,7 +13,15 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "declarationMap": false,
+    "sourceMap": false,
+    "incremental": true,
+    "noEmitOnError": true,
+    "newLine": "lf",
+    "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
   "include": [
     "src/**/*"
