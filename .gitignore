@@ -1,6 +1,7 @@
 # .gitignore
 cortex-mcp/
 /docs
+.docs/
 
 # Dependencies
 node_modules/
