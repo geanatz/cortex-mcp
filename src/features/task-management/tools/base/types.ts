@@ -1,14 +1,10 @@
 import { McpToolHandler, McpToolResponse } from '../../../../types/common.js';
 
-export interface ToolDefinition<TInput = Record<string, unknown>> {
+export interface ToolDefinition {
   readonly name: string;
   readonly description: string;
-  readonly parameters: {
-    type: 'object';
-    properties: Record<string, unknown>;
-    required: string[];
-  };
-  readonly handler: McpToolHandler<TInput>;
+  readonly parameters: Record<string, any>;
+  readonly handler: McpToolHandler<any>;
 }
 
 export type ToolHandler<TInput = Record<string, unknown>, TOutput = McpToolResponse> = (

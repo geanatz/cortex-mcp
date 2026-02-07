@@ -11,6 +11,8 @@ import {
 } from '../../models/artifact.js';
 import { ToolDefinition } from '../../tools/base/types.js';
 import { withErrorHandling } from '../../tools/base/handlers.js';
+import { z } from 'zod';
+import { workingDirectorySchema, taskIdSchema } from '../../tools/base/schemas.js';
 
 const logger = createLogger('artifact-tools');
 
@@ -201,36 +203,12 @@ export function createArtifactTools(
       name: `cortex_create_${phase}`,
       description: OPERATION_DESCRIPTIONS.create[phase],
       parameters: {
-        type: 'object',
-        properties: {
-          workingDirectory: {
-            type: 'string',
-            description: getWorkingDirectoryDescription(config)
-          },
-          taskId: {
-            type: 'string',
-            description: 'The ID of the task to create the artifact for'
-          },
-          content: {
-            type: 'string',
-            description: `Markdown content for the ${phase} artifact. ${PHASE_DESCRIPTIONS[phase]}`
-          },
-          status: {
-            type: 'string',
-            enum: ['pending', 'in-progress', 'completed', 'failed', 'skipped'],
-            description: 'Status of this phase (defaults to "completed")'
-          },
-          retries: {
-            type: 'number',
-            minimum: 0,
-            description: 'Number of retry attempts for this phase'
-          },
-          error: {
-            type: 'string',
-            description: 'Error message if status is "failed"'
-          }
-        },
-        required: ['workingDirectory', 'taskId', 'content']
+        workingDirectory: workingDirectorySchema,
+        taskId: taskIdSchema.describe('The ID of the task to create the artifact for'),
+        content: z.string().describe(`Markdown content for the ${phase} artifact. ${PHASE_DESCRIPTIONS[phase]}`),
+        status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional().describe('Status of this phase (defaults to "completed")'),
+        retries: z.number().min(0).optional().describe('Number of retry attempts for this phase'),
+        error: z.string().optional().describe('Error message if status is "failed"')
       },
       handler: withErrorHandling(createCreateHandler(phase, config, createStorage))
     });
@@ -239,36 +217,12 @@ export function createArtifactTools(
       name: `cortex_update_${phase}`,
       description: OPERATION_DESCRIPTIONS.update[phase],
       parameters: {
-        type: 'object',
-        properties: {
-          workingDirectory: {
-            type: 'string',
-            description: getWorkingDirectoryDescription(config)
-          },
-          taskId: {
-            type: 'string',
-            description: 'The ID of the task to update the artifact for'
-          },
-          content: {
-            type: 'string',
-            description: `Updated markdown content for the ${phase} artifact`
-          },
-          status: {
-            type: 'string',
-            enum: ['pending', 'in-progress', 'completed', 'failed', 'skipped'],
-            description: 'Updated status of this phase'
-          },
-          retries: {
-            type: 'number',
-            minimum: 0,
-            description: 'Updated number of retry attempts'
-          },
-          error: {
-            type: 'string',
-            description: 'Updated error message'
-          }
-        },
-        required: ['workingDirectory', 'taskId']
+        workingDirectory: workingDirectorySchema,
+        taskId: taskIdSchema.describe('The ID of the task to update the artifact for'),
+        content: z.string().optional().describe(`Updated markdown content for the ${phase} artifact`),
+        status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional().describe('Updated status of this phase'),
+        retries: z.number().min(0).optional().describe('Updated number of retry attempts'),
+        error: z.string().optional().describe('Updated error message')
       },
       handler: withErrorHandling(createUpdateHandler(phase, config, createStorage))
     });
@@ -277,22 +231,9 @@ export function createArtifactTools(
       name: `cortex_delete_${phase}`,
       description: OPERATION_DESCRIPTIONS.delete[phase],
       parameters: {
-        type: 'object',
-        properties: {
-          workingDirectory: {
-            type: 'string',
-            description: getWorkingDirectoryDescription(config)
-          },
-          taskId: {
-            type: 'string',
-            description: 'The ID of the task to delete the artifact from'
-          },
-          confirm: {
-            type: 'boolean',
-            description: 'Must be set to true to confirm deletion (safety measure)'
-          }
-        },
-        required: ['workingDirectory', 'taskId', 'confirm']
+        workingDirectory: workingDirectorySchema,
+        taskId: taskIdSchema.describe('The ID of the task to delete the artifact from'),
+        confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
       },
       handler: withErrorHandling(createDeleteHandler(phase, config, createStorage))
     });
