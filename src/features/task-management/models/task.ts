@@ -2,6 +2,12 @@
  * Task data model for the task management system
  * ID = folder name (e.g., '001-implement-auth') - acts as the task title
  * Details = comprehensive description
+ * 
+ * New Structure:
+ * - Each parent task has its own folder
+ * - Subtasks are stored INSIDE the parent .task.json file
+ * - No separate folders for subtasks
+ * - No dependsOn field - simplified dependency model
  */
 
 /**
@@ -20,46 +26,56 @@ export const TASK_STATUS_INFO: Record<TaskStatus, { label: string; icon: string;
 } as const;
 
 /**
- * Base task interface with all fields
+ * Subtask - simplified task for organizational purposes
+ * Stored inside parent task's subtasks array
+ * Single level only - subtasks cannot have their own subtasks
+ */
+export interface Subtask {
+  /** Subtask ID (simple incremental number: "1", "2", etc.) */
+  readonly id: string;
+  /** Subtask description */
+  details: string;
+  /** Subtask status */
+  status: TaskStatus;
+}
+
+/**
+ * Base task interface - parent task with all fields
+ * Each parent task has its own folder with .task.json
  */
 export interface Task {
-  /** Unique identifier for the task (same as folder name, acts as task title, e.g., '001-implement-auth') */
+  /** Unique identifier for the task (same as folder name, e.g., '001-implement-auth') */
   readonly id: string;
   /** Comprehensive task description with full context and requirements */
   details: string;
-  /** Reference to parent task ID (null for top-level tasks) */
-  parentId?: string;
   /** Timestamp when the task was created */
   readonly createdAt: string;
   /** Timestamp when the task was last updated */
   updatedAt: string;
-  /** Task dependencies - IDs of tasks that must be completed before this task */
-  dependsOn?: string[];
   /** Task status (pending, in_progress, done) */
   status: TaskStatus;
   /** Tags for categorization and filtering */
   tags?: string[];
   /** Actual time spent in hours */
   actualHours?: number;
-  /** Nesting level for UI optimization (calculated field) */
-  level?: number;
+  /** Subtasks for organizational purposes */
+  subtasks: Subtask[];
 }
 
 /**
- * Task without calculated fields (as stored in JSON)
+ * Task without readonly fields (for internal updates)
  */
-export type StoredTask = Omit<Task, 'level'>;
+export type MutableTask = Omit<Task, 'id' | 'createdAt'> & {
+  id: string;
+  createdAt: string;
+};
 
 /**
- * Input data for creating a new task
+ * Input data for creating a new parent task
  */
 export interface CreateTaskInput {
-  /** Task description - first part used to generate folder name/ID, can include full details */
+  /** Task description - used to generate folder name/ID */
   details: string;
-  /** Reference to parent task ID (optional, null for top-level tasks) */
-  parentId?: string;
-  /** Task dependencies - IDs of tasks that must be completed before this task */
-  dependsOn?: string[];
   /** Task status (defaults to 'pending') */
   status?: TaskStatus;
   /** Tags for categorization and filtering */
@@ -67,21 +83,46 @@ export interface CreateTaskInput {
 }
 
 /**
- * Input data for updating an existing task
+ * Input for adding a new subtask
+ */
+export interface AddSubtaskInput {
+  /** Subtask description */
+  details: string;
+  /** Subtask status (defaults to 'pending') */
+  status?: TaskStatus;
+}
+
+/**
+ * Input for updating an existing subtask
+ */
+export interface UpdateSubtaskInput {
+  /** Subtask ID to update */
+  id: string;
+  /** Updated description (optional) */
+  details?: string;
+  /** Updated status (optional) */
+  status?: TaskStatus;
+}
+
+/**
+ * Input data for updating an existing parent task
+ * Supports updating parent fields and subtask operations
  */
 export interface UpdateTaskInput {
   /** Task description (optional) */
   details?: string;
-  /** Reference to parent task (optional) */
-  parentId?: string;
-  /** Task dependencies - IDs of tasks that must be completed before this task */
-  dependsOn?: string[];
   /** Task status */
   status?: TaskStatus;
   /** Tags for categorization and filtering */
   tags?: string[];
   /** Actual time spent in hours */
   actualHours?: number;
+  /** Add a new subtask */
+  addSubtask?: AddSubtaskInput;
+  /** Update an existing subtask */
+  updateSubtask?: UpdateSubtaskInput;
+  /** Remove subtask by ID */
+  removeSubtaskId?: string;
 }
 
 /**
@@ -89,7 +130,6 @@ export interface UpdateTaskInput {
  */
 export interface TaskHierarchy {
   readonly task: Task;
-  readonly children: readonly TaskHierarchy[];
   readonly depth: number;
 }
 
@@ -99,19 +139,16 @@ export interface TaskHierarchy {
 export interface TaskSummary {
   readonly id: string;
   readonly status: TaskStatus;
-  readonly level: number;
-  readonly childCount: number;
-  readonly doneChildCount: number;
+  readonly subtaskCount: number;
+  readonly doneSubtaskCount: number;
 }
 
 /**
  * Task filters for querying
  */
 export interface TaskFilters {
-  readonly parentId?: string;
   readonly status?: TaskStatus | TaskStatus[];
   readonly tags?: string[];
-  readonly hasDependencies?: boolean;
   readonly includeDone?: boolean;
 }
 
@@ -137,56 +174,46 @@ export function getStatusLabel(status: TaskStatus): string {
 }
 
 /**
- * Check if task is done
+ * Check if task is done (including all subtasks)
  */
 export function isTaskDone(task: Task): boolean {
-  return task.status === 'done';
+  if (task.status !== 'done') return false;
+  if (task.subtasks.length === 0) return true;
+  return task.subtasks.every(subtask => subtask.status === 'done');
 }
 
 /**
- * Check if task is blocked by dependencies
+ * Calculate task progress (ratio of done subtasks)
  */
-export function isTaskBlocked(task: Task, allTasks: readonly Task[]): boolean {
-  if (!task.dependsOn || task.dependsOn.length === 0) {
-    return false;
+export function calculateTaskProgress(task: Task): number {
+  if (task.subtasks.length === 0) {
+    return task.status === 'done' ? 1 : 0;
   }
   
-  return task.dependsOn.some(depId => {
-    const dep = allTasks.find(t => t.id === depId);
-    return dep && dep.status !== 'done';
-  });
+  const doneCount = task.subtasks.filter(s => s.status === 'done').length;
+  return doneCount / task.subtasks.length;
 }
 
 /**
- * Get blocking tasks
+ * Generate next subtask ID
  */
-export function getBlockingTasks(task: Task, allTasks: readonly Task[]): Task[] {
-  if (!task.dependsOn || task.dependsOn.length === 0) {
-    return [];
-  }
-  
-  return task.dependsOn
-    .map(depId => allTasks.find(t => t.id === depId))
-    .filter((dep): dep is Task => dep !== undefined && dep.status !== 'done');
+export function generateNextSubtaskId(subtasks: readonly Subtask[]): string {
+  if (subtasks.length === 0) return '1';
+  const maxId = Math.max(...subtasks.map(s => parseInt(s.id, 10)).filter(n => !isNaN(n)));
+  return String(maxId + 1);
 }
 
 /**
- * Calculate task progress (ratio of done children)
+ * Find subtask by ID
  */
-export function calculateTaskProgress(hierarchy: TaskHierarchy): number {
-  const countTasks = (h: TaskHierarchy): { total: number; done: number } => {
-    let total = 1;
-    let done = h.task.status === 'done' ? 1 : 0;
-    
-    for (const child of h.children) {
-      const childCounts = countTasks(child);
-      total += childCounts.total;
-      done += childCounts.done;
-    }
-    
-    return { total, done };
-  };
-  
-  const { total, done } = countTasks(hierarchy);
-  return total > 0 ? done / total : 0;
+export function findSubtask(task: Task, subtaskId: string): Subtask | undefined {
+  return task.subtasks.find(s => s.id === subtaskId);
+}
+
+/**
+ * Check if all subtasks are done
+ */
+export function areAllSubtasksDone(task: Task): boolean {
+  if (task.subtasks.length === 0) return true;
+  return task.subtasks.every(s => s.status === 'done');
 }

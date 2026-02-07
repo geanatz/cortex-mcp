@@ -12,9 +12,9 @@
 
 /**
  * Current schema version for the task storage format
- * v8.0.0 - Simplified task status (removed completed field, status only)
+ * v9.0.0 - Simplified model: subtasks inline, no dependsOn, no parentId
  */
-export const CURRENT_STORAGE_VERSION = '8.0.0';
+export const CURRENT_STORAGE_VERSION = '9.0.0';
 
 /**
  * Storage paths configuration
@@ -25,7 +25,7 @@ export const STORAGE_PATHS = {
   /** Tasks directory name */
   TASKS_DIR: 'tasks',
   /** Task metadata filename */
-  TASK_FILE: 'task.json',
+  TASK_FILE: '.task.json',
 } as const;
 
 /**

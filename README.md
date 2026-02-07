@@ -4,9 +4,8 @@ An MCP (Model Context Protocol) server for managing task-based workflows with ar
 
 ## Features
 
-- **Hierarchical Task Management** - Create unlimited nested task hierarchies
+- **Simplified Task Management** - Parent tasks with inline subtasks, no separate folders
 - **Phase-Aware Artifacts** - Store and manage artifacts for each orchestration phase (explore, search, plan, build, test)
-- **Task Dependencies** - Define dependencies between tasks to track blocking workflows
 - **File-Based Storage** - All data stored in `.cortex/` directory with no database required
 - **In-Memory Caching** - High-performance caching layer with TTL for frequently accessed tasks
 - **Structured Logging** - Comprehensive logging with configurable levels
@@ -32,14 +31,25 @@ cortex-mcp --claude
 ### Creating Tasks
 
 ```
-Tool: cortex_create_task
+Tool: create_task
 Parameters:
   - workingDirectory: path where tasks are stored
   - details: task description (generates task ID)
-  - parentId (optional): create as subtask
   - status (optional): pending | in_progress | done
   - tags (optional): categorization tags
-  - dependsOn (optional): blocking task IDs
+```
+
+### Managing Subtasks
+
+Subtasks are created using `update_task` with the `addSubtask` parameter:
+
+```
+Tool: update_task
+Parameters:
+  - id: parent task ID
+  - addSubtask: { details: "Subtask description", status: "pending" }
+  - updateSubtask: { id: "1", status: "done" }
+  - removeSubtaskId: "1"
 ```
 
 ### Managing Artifacts
@@ -52,7 +62,7 @@ Each task can have artifacts for 5 phases:
 - **test**: Test execution results and verification status
 
 ```
-Tools: cortex_create_{phase}, cortex_update_{phase}, cortex_delete_{phase}
+Tools: create_{phase}, update_{phase}, delete_{phase}
 Parameters:
   - workingDirectory: project directory
   - taskId: which task to attach artifact to
@@ -69,35 +79,58 @@ Tasks are stored in `.cortex/tasks/{number}-{slug}/` directories:
 .cortex/
 └── tasks/
     ├── 001-implement-auth/
-    │   ├── task.json          (task metadata)
+    │   ├── .task.json          (parent task + subtasks array)
     │   ├── explore.md         (explore phase artifact)
     │   ├── search.md          (search phase artifact)
     │   ├── plan.md            (plan phase artifact)
     │   ├── build.md           (build phase artifact)
     │   └── test.md            (test phase artifact)
-    ├── 002-setup-database/
-    │   ├── task.json
-    │   └── ... (optional artifacts)
-    └── 003-test-integration/
-        ├── task.json
+    └── 002-setup-database/
+        ├── .task.json
         └── ... (optional artifacts)
+```
+
+### Task JSON Structure
+
+```json
+{
+  "id": "001-implement-auth",
+  "details": "Implement authentication system",
+  "status": "in_progress",
+  "tags": ["auth", "backend"],
+  "createdAt": "2024-01-01T00:00:00Z",
+  "updatedAt": "2024-01-01T00:00:00Z",
+  "actualHours": 2.5,
+  "subtasks": [
+    { "id": "1", "details": "Setup JWT library", "status": "done" },
+    { "id": "2", "details": "Create login endpoint", "status": "in_progress" },
+    { "id": "3", "details": "Add middleware", "status": "pending" }
+  ]
+}
 ```
 
 ## Data Model
 
-### Task
+### Task (Parent)
 ```typescript
 interface Task {
   id: string;                    // Task ID (e.g., "001-implement-auth")
-  details: string;               // Full task description/requirements
-  parentId?: string;             // Parent task for hierarchy
-  status: 'pending'              //  'in_progress' | 'done'
+  details: string;               // Full task description
+  status: 'pending' | 'in_progress' | 'done';
   createdAt: string;             // ISO 8601 timestamp
   updatedAt: string;             // Last modification timestamp
-  dependsOn?: string[];          // List of blocking task IDs
   tags?: string[];               // Categorization tags
   actualHours?: number;          // Time tracking
-  level?: number;                // Nesting depth (calculated)
+  subtasks: Subtask[];           // Array of subtasks
+}
+```
+
+### Subtask
+```typescript
+interface Subtask {
+  id: string;                    // Simple ID ("1", "2", etc.)
+  details: string;               // Subtask description
+  status: 'pending' | 'in_progress' | 'done';
 }
 ```
 
@@ -105,8 +138,8 @@ interface Task {
 ```typescript
 interface Artifact {
   metadata: {
-    phase: 'explore'             // | 'search' | 'plan' | 'build' | 'test'
-    status: 'pending'             // | 'in-progress' | 'completed' | 'failed' | 'skipped'
+    phase: 'explore' | 'search' | 'plan' | 'build' | 'test';
+    status: 'pending' | 'in-progress' | 'completed' | 'failed' | 'skipped';
     createdAt: string;            // ISO 8601
     updatedAt: string;            // ISO 8601
     retries?: number;             // Attempt count
@@ -115,6 +148,32 @@ interface Artifact {
   content: string;               // Markdown content
 }
 ```
+
+## Available Tools
+
+### Task Management
+- `create_task` - Create a new parent task
+- `list_tasks` - List all tasks with subtasks
+- `get_task` - Get task details including subtasks and artifacts
+- `update_task` - Update task and manage subtasks
+- `delete_task` - Delete task and all its subtasks
+
+### Artifact Management
+- `create_explore` - Create explore phase artifact
+- `update_explore` - Update explore phase artifact
+- `delete_explore` - Delete explore phase artifact
+- `create_search` - Create search phase artifact
+- `update_search` - Update search phase artifact
+- `delete_search` - Delete search phase artifact
+- `create_plan` - Create plan phase artifact
+- `update_plan` - Update plan phase artifact
+- `delete_plan` - Delete plan phase artifact
+- `create_build` - Create build phase artifact
+- `update_build` - Update build phase artifact
+- `delete_build` - Delete build phase artifact
+- `create_test` - Create test phase artifact
+- `update_test` - Update test phase artifact
+- `delete_test` - Delete test phase artifact
 
 ## Configuration
 
@@ -151,8 +210,9 @@ npm start
 
 ## Version
 
-Current version: **4.0.0**
+Current version: **5.0.0**
 
+- v5.0.0: Simplified model - subtasks stored inline, removed dependencies, removed move_task
 - v4.0.0: Complete refactor with artifact support and optimized build
 - v3.x: Legacy memory features (deprecated)
 - v1.x: Initial implementation

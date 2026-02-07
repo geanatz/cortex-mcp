@@ -39,38 +39,17 @@ function formatArtifactSection(phase: ArtifactPhase, artifact: Artifact): string
 }
 
 /**
- * Get all descendant task IDs recursively
+ * Count total subtasks in a task
  */
-async function getAllDescendants(storage: Storage, taskId: string): Promise<string[]> {
-  const children = await storage.getTaskChildren(taskId);
-  const descendants: string[] = [];
-
-  for (const child of children) {
-    descendants.push(child.id);
-    const childDescendants = await getAllDescendants(storage, child.id);
-    descendants.push(...childDescendants);
-  }
-
-  return descendants;
+function countSubtasks(task: Task): number {
+  return task.subtasks?.length || 0;
 }
 
 /**
- * Count total tasks in hierarchy
+ * Count done subtasks in a task
  */
-function countTasksInHierarchy(hierarchy: readonly TaskHierarchy[]): number {
-  return hierarchy.reduce((count, item) => {
-    return count + 1 + countTasksInHierarchy(item.children);
-  }, 0);
-}
-
-/**
- * Count done tasks in hierarchy
- */
-function countDoneTasksInHierarchy(hierarchy: readonly TaskHierarchy[]): number {
-  return hierarchy.reduce((count, item) => {
-    const thisCount = item.task.status === 'done' ? 1 : 0;
-    return count + thisCount + countDoneTasksInHierarchy(item.children);
-  }, 0);
+function countDoneSubtasks(task: Task): number {
+  return task.subtasks?.filter(s => s.status === 'done').length || 0;
 }
 
 // ==================== Tool Factories ====================
@@ -91,7 +70,7 @@ export function createTaskTools(
     createGetTaskTool(wdSchema, config, createStorage),
     createUpdateTaskTool(wdSchema, config, createStorage),
     createDeleteTaskTool(wdSchema, config, createStorage),
-    createMoveTaskTool(wdSchema, config, createStorage),
+    // REMOVED: createMoveTaskTool - no longer needed in simplified model
   ];
 }
 
@@ -104,63 +83,53 @@ function createListTasksTool(
 ): ToolDefinition {
   interface ListParams {
     workingDirectory: string;
-    parentId?: string;
     showHierarchy?: boolean;
     includeDone?: boolean;
   }
 
-  const handler = async ({ workingDirectory, parentId, showHierarchy = true, includeDone = true }: ListParams) => {
+  const handler = async ({ workingDirectory, showHierarchy = true, includeDone = true }: ListParams) => {
     try {
       const storage = await createStorage(workingDirectory, config);
 
-      let parentTask: Task | null = null;
-      if (parentId) {
-        parentTask = await storage.getTask(parentId);
-        if (!parentTask) {
-          return {
-            content: [{ type: 'text' as const, text: `Error: Parent task with ID "${parentId}" not found.` }],
-            isError: true
-          };
-        }
-      }
-
       if (showHierarchy) {
-        const hierarchy = await storage.getTaskHierarchy(parentId);
+        const hierarchy = await storage.getTaskHierarchy();
 
         if (hierarchy.length === 0) {
-          const scopeDescription = parentTask
-            ? `under parent task "${parentTask.id}"`
-            : `at the top level`;
           return {
-            content: [{ type: 'text' as const, text: `No tasks found ${scopeDescription}. Create your first task using create_task.` }]
+            content: [{ type: 'text' as const, text: 'No tasks found. Create your first task using create_task.' }]
           };
         }
 
-        const formatTaskHierarchy = (hierarchyList: readonly TaskHierarchy[], baseLevel: number = 0): string => {
+        const formatTaskHierarchy = (hierarchyList: readonly TaskHierarchy[]): string => {
           return hierarchyList.map(item => {
             const task = item.task;
             if (!includeDone && task.status === 'done') return '';
 
-            const indent = '  '.repeat(baseLevel);
             const icon = task.status === 'done' ? '✅' : '⏳';
-            const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
+            const statusText = ` [${task.status.toUpperCase()}]`;
+            const subtaskSummary = task.subtasks?.length 
+              ? ` (${countDoneSubtasks(task)}/${countSubtasks(task)} subtasks done)`
+              : '';
 
-            let taskLine = `${indent}${icon} **${task.id}**${statusText}\n`;
-            taskLine += `${indent}   Level: ${task.level || 0}\n`;
-            taskLine += `${indent}   ${task.details}\n`;
+            let taskLine = `${icon} **${task.id}**${statusText}${subtaskSummary}\n`;
+            taskLine += `   ${task.details}\n`;
 
             if (task.tags && task.tags.length > 0) {
-              taskLine += `${indent}   Tags: ${task.tags.join(', ')}\n`;
+              taskLine += `   Tags: ${task.tags.join(', ')}\n`;
             }
 
-            if (task.dependsOn && task.dependsOn.length > 0) {
-              taskLine += `${indent}   Dependencies: ${task.dependsOn.length} task(s)\n`;
-            }
-
-            if (item.children.length > 0) {
-              const childrenText = formatTaskHierarchy(item.children, baseLevel + 1);
-              if (childrenText.trim()) {
-                taskLine += childrenText;
+            // Show subtasks indented
+            if (task.subtasks && task.subtasks.length > 0) {
+              const visibleSubtasks = includeDone 
+                ? task.subtasks 
+                : task.subtasks.filter(s => s.status !== 'done');
+              
+              if (visibleSubtasks.length > 0) {
+                taskLine += '\n   📋 Subtasks:\n';
+                for (const subtask of visibleSubtasks) {
+                  const subIcon = subtask.status === 'done' ? '✅' : '⏳';
+                  taskLine += `      ${subIcon} [${subtask.id}] ${subtask.details}\n`;
+                }
               }
             }
 
@@ -169,38 +138,32 @@ function createListTasksTool(
         };
 
         const hierarchyText = formatTaskHierarchy(hierarchy);
-        const totalTasks = countTasksInHierarchy(hierarchy);
-        const doneTasks = countDoneTasksInHierarchy(hierarchy);
-
-        const scopeInfo = parentTask
-          ? `Showing hierarchy under "${parentTask.id}"`
-          : `Showing full task hierarchy`;
+        const totalTasks = hierarchy.length;
+        const totalSubtasks = hierarchy.reduce((sum, h) => sum + countSubtasks(h.task), 0);
+        const doneTasks = hierarchy.filter(h => h.task.status === 'done').length;
+        const doneSubtasks = hierarchy.reduce((sum, h) => sum + countDoneSubtasks(h.task), 0);
 
         return {
           content: [{
             type: 'text' as const,
             text: `🌲 **Task Hierarchy**
 
-  ${scopeInfo}
-   Total: ${totalTasks} tasks (${doneTasks} done)
+Total: ${totalTasks} tasks with ${totalSubtasks} subtasks (${doneTasks} tasks, ${doneSubtasks} subtasks done)
 
-  ${hierarchyText}
+${hierarchyText}
 
-  💡 **Tips:**
-  • Use \`create_task\` with parentId to add tasks at any level
-  • Use \`list_tasks\` with specific parentId to focus on a subtree
-  • Use \`update_task\` to change parent relationships`
+💡 **Tips:**
+• Use \`create_task\` to add new tasks
+• Use \`update_task\` with addSubtask to break down tasks
+• Use \`list_tasks\` with includeDone: false to hide completed work`
           }]
         };
       } else {
-        const tasks = await storage.getTasks(parentId);
+        const tasks = await storage.getTasks();
 
         if (tasks.length === 0) {
-          const scopeDescription = parentTask
-            ? `under parent task "${parentTask.id}"`
-            : `at the top level`;
           return {
-            content: [{ type: 'text' as const, text: `No tasks found ${scopeDescription}. Create your first task using create_task.` }]
+            content: [{ type: 'text' as const, text: 'No tasks found. Create your first task using create_task.' }]
           };
         }
 
@@ -208,35 +171,34 @@ function createListTasksTool(
 
         const taskList = filteredTasks.map(task => {
           const icon = task.status === 'done' ? '✅' : '⏳';
-          const statusText = task.status ? ` [${task.status.toUpperCase()}]` : '';
+          const statusText = ` [${task.status.toUpperCase()}]`;
+          const subtaskInfo = task.subtasks?.length 
+            ? ` (${countDoneSubtasks(task)}/${countSubtasks(task)} subtasks)`
+            : '';
 
-          return `${icon} **${task.id}**${statusText}
-    Level: ${task.level || 0}
+          return `${icon} **${task.id}**${statusText}${subtaskInfo}
     ${task.details}
     ${task.tags && task.tags.length > 0 ? `Tags: ${task.tags.join(', ')}` : ''}
     Created: ${new Date(task.createdAt).toLocaleString()}`;
         }).join('\n\n');
 
         const doneCount = filteredTasks.filter(t => t.status === 'done').length;
-        const scopeDescription = parentTask
-          ? `under "${parentTask.id}"`
-          : `at top level`;
 
         return {
           content: [{
             type: 'text' as const,
-            text: `📋 **Tasks ${scopeDescription}**
+            text: `📋 **Tasks**
 
-  Found ${filteredTasks.length} task(s) (${doneCount} done):
+Found ${filteredTasks.length} task(s) (${doneCount} done):
 
-  ${taskList}
+${taskList}
 
-  💡 Use \`list_tasks\` with \`showHierarchy: true\` to see the full tree structure.`
+💡 Use \`list_tasks\` with \`showHierarchy: true\` to see subtasks.`
           }]
         };
       }
     } catch (error) {
-      logger.error('Error in cortex_list_tasks', error);
+      logger.error('Error in list_tasks', error);
       return {
         content: [{ type: 'text' as const, text: `Error listing tasks: ${error instanceof Error ? error.message : 'Unknown error'}` }],
         isError: true
@@ -245,12 +207,11 @@ function createListTasksTool(
   };
 
   return {
-    name: 'cortex_list_tasks',
-    description: 'List all tasks with hierarchical display. Filter by parentId for subtrees. Perfect for understanding current workflow state and task organization.',
+    name: 'list_tasks',
+    description: 'List all tasks with hierarchical display including subtasks. Perfect for understanding current workflow state and task organization.',
     parameters: {
       workingDirectory: wdSchema,
-      parentId: z.string().optional().describe('Filter to tasks under this parent (optional)'),
-      showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format (default: true)'),
+      showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format with subtasks (default: true)'),
       includeDone: z.boolean().optional().describe('Include done tasks in results (default: true)')
     },
     handler: withErrorHandling(handler)
@@ -267,83 +228,42 @@ function createCreateTaskTool(
   interface CreateParams {
     workingDirectory: string;
     details: string;
-    parentId?: string;
-    dependsOn?: string[];
     status?: 'pending' | 'in_progress' | 'done';
     tags?: string[];
   }
 
-  const handler = async ({ workingDirectory, details, parentId, dependsOn, status, tags }: CreateParams) => {
+  const handler = async ({ workingDirectory, details, status, tags }: CreateParams) => {
     try {
       const storage = await createStorage(workingDirectory, config);
 
-      let parentTask: Task | null = null;
-      let taskLevel = 0;
-
-      if (parentId) {
-        parentTask = await storage.getTask(parentId.trim());
-        if (!parentTask) {
-          return {
-            content: [{ type: 'text' as const, text: `Error: Parent task with ID "${parentId}" not found. Use list_tasks to see available tasks.` }],
-            isError: true
-          };
-        }
-        taskLevel = (parentTask.level || 0) + 1;
-      }
-
-      if (dependsOn && dependsOn.length > 0) {
-        for (const depId of dependsOn) {
-          const depTask = await storage.getTask(depId);
-          if (!depTask) {
-            return {
-              content: [{ type: 'text' as const, text: `Error: Dependency task with ID "${depId}" not found.` }],
-              isError: true
-            };
-          }
-        }
-      }
-
       const createdTask = await storage.createTask({
         details: details.trim(),
-        parentId: parentId?.trim(),
-        dependsOn,
         status,
         tags,
       });
-
-      const hierarchyPath = parentTask
-        ? `${parentTask.id} → ${createdTask.id}`
-        : createdTask.id;
-      const levelIndicator = '  '.repeat(taskLevel) + '→';
 
       return {
         content: [{
           type: 'text' as const,
           text: `✅ Task created successfully!
 
- **${levelIndicator} ${createdTask.id}**
- ${parentTask ? `Parent: ${parentTask.id}` : 'Top-level task'}
- Level: ${taskLevel} ${taskLevel === 0 ? '(Top-level)' : `(${taskLevel} level${taskLevel > 1 ? 's' : ''} deep)`}
- Path: ${hierarchyPath}
+**${createdTask.id}**
 
- 📋 **Task Details:**
- • Details: ${createdTask.details}
- • Status: ${createdTask.status}
- • Tags: ${createdTask.tags?.join(', ') || 'None'}
- • Dependencies: ${createdTask.dependsOn?.length ? createdTask.dependsOn.join(', ') : 'None'}
- • Created: ${new Date(createdTask.createdAt).toLocaleString()}
+📋 **Task Details:**
+• Details: ${createdTask.details}
+• Status: ${createdTask.status}
+• Tags: ${createdTask.tags?.join(', ') || 'None'}
+• Subtasks: None (add with update_task)
+• Created: ${new Date(createdTask.createdAt).toLocaleString()}
 
- 🎯 **Next Steps:**
- ${taskLevel === 0
-   ? '• Break down into smaller tasks using create_task with parentId for complex work'
-   : '• Add even more granular tasks if needed using create_task with this task as parentId'
-}
- • Update progress using \`update_task\` as you work
- • Use \`list_tasks\` with parentId to see the task hierarchy`
+🎯 **Next Steps:**
+• Break down into subtasks using update_task with addSubtask
+• Update progress using \`update_task\` as you work
+• Add phase artifacts (explore, plan, build, test)`
         }]
       };
     } catch (error) {
-      logger.error('Error in cortex_create_task', error);
+      logger.error('Error in create_task', error);
       return {
         content: [{ type: 'text' as const, text: `Error creating task: ${error instanceof Error ? error.message : 'Unknown error'}` }],
         isError: true
@@ -352,13 +272,11 @@ function createCreateTaskTool(
   };
 
   return {
-    name: 'cortex_create_task',
-    description: 'Create a new task for the orchestration workflow. Task ID is auto-generated from details. Use parentId to create subtasks for hierarchical organization.',
+    name: 'create_task',
+    description: 'Create a new task for the orchestration workflow. Task ID is auto-generated from details. Use update_task with addSubtask to create subtasks.',
     parameters: {
       workingDirectory: wdSchema,
       details: z.string().describe('Task description - used to generate the task ID (e.g., "Implement authentication" becomes "001-implement-authentication")'),
-      parentId: z.string().optional().describe('Parent task ID for creating subtasks (optional - creates top-level task if not specified)'),
-      dependsOn: z.array(z.string()).optional().describe('Array of task IDs that must be completed before this task'),
       status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Initial task status (defaults to pending)'),
       tags: z.array(z.string()).optional().describe('Tags for categorization and filtering')
     },
@@ -391,11 +309,19 @@ function createGetTaskTool(
       }
 
       const artifacts = await storage.getAllArtifacts(task.id);
-      const childTasks = await storage.getTaskChildren(task.id);
-      const doneChildren = childTasks.filter(t => t.status === 'done').length;
-      const childTaskSummary = childTasks.length > 0
-        ? `${doneChildren}/${childTasks.length} done`
-        : 'None';
+
+      // Build subtasks section
+      let subtasksSection = '';
+      if (task.subtasks && task.subtasks.length > 0) {
+        const doneCount = countDoneSubtasks(task);
+        subtasksSection = `\n## Subtasks (${doneCount}/${task.subtasks.length} done)\n\n`;
+        for (const subtask of task.subtasks) {
+          const icon = subtask.status === 'done' ? '✅' : '⏳';
+          subtasksSection += `- ${icon} **[${subtask.id}]** ${subtask.details} (${subtask.status})\n`;
+        }
+      } else {
+        subtasksSection = '\n## Subtasks\n\nNo subtasks yet. Use update_task with addSubtask to create them.\n';
+      }
 
       const artifactSummary = ARTIFACT_PHASES.map(phase => {
         const artifact = artifacts[phase];
@@ -413,17 +339,17 @@ function createGetTaskTool(
 
       const taskInfo = `# Task: ${task.id}
 
-  ## Metadata
-  - **Status:** ${task.status}
-  - **Details:** ${task.details}
-  - **Tags:** ${task.tags?.join(', ') || 'None'}
-  - **Dependencies:** ${task.dependsOn?.length ? task.dependsOn.join(', ') : 'None'}
-  - **Child Tasks:** ${childTaskSummary}
-  - **Created:** ${new Date(task.createdAt).toLocaleString()}
-  - **Updated:** ${new Date(task.updatedAt).toLocaleString()}
+## Metadata
+- **Status:** ${task.status}
+- **Details:** ${task.details}
+- **Tags:** ${task.tags?.join(', ') || 'None'}
+- **Actual Hours:** ${task.actualHours || 'Not set'}
+- **Created:** ${new Date(task.createdAt).toLocaleString()}
+- **Updated:** ${new Date(task.updatedAt).toLocaleString()}
+${subtasksSection}
 
-  ## Phase Artifacts
-  ${artifactSummary}`;
+## Phase Artifacts
+${artifactSummary}`;
 
       const fullOutput = artifactSections
         ? `${taskInfo}\n\n---\n\n${artifactSections}`
@@ -433,7 +359,7 @@ function createGetTaskTool(
         content: [{ type: 'text' as const, text: fullOutput }]
       };
     } catch (error) {
-      logger.error('Error in cortex_get_task', error);
+      logger.error('Error in get_task', error);
       return {
         content: [{ type: 'text' as const, text: `Error retrieving task: ${error instanceof Error ? error.message : 'Unknown error'}` }],
         isError: true
@@ -442,8 +368,8 @@ function createGetTaskTool(
   };
 
   return {
-    name: 'cortex_get_task',
-    description: 'Retrieve complete task details including all phase artifacts (explore, search, plan, build, test). Essential for understanding current task state and accumulated knowledge.',
+    name: 'get_task',
+    description: 'Retrieve complete task details including all subtasks and phase artifacts (explore, search, plan, build, test). Essential for understanding current task state and accumulated knowledge.',
     parameters: {
       workingDirectory: wdSchema,
       id: z.string().describe('The unique identifier of the task to retrieve')
@@ -463,14 +389,22 @@ function createUpdateTaskTool(
     workingDirectory: string;
     id: string;
     details?: string;
-    parentId?: string;
-    dependsOn?: string[];
     status?: 'pending' | 'in_progress' | 'done';
     tags?: string[];
     actualHours?: number;
+    addSubtask?: {
+      details: string;
+      status?: 'pending' | 'in_progress' | 'done';
+    };
+    updateSubtask?: {
+      id: string;
+      details?: string;
+      status?: 'pending' | 'in_progress' | 'done';
+    };
+    removeSubtaskId?: string;
   }
 
-  const handler = async ({ workingDirectory, id, details, parentId, dependsOn, status, tags, actualHours }: UpdateParams) => {
+  const handler = async ({ workingDirectory, id, details, status, tags, actualHours, addSubtask, updateSubtask, removeSubtaskId }: UpdateParams) => {
     try {
       const storage = await createStorage(workingDirectory, config);
 
@@ -481,9 +415,9 @@ function createUpdateTaskTool(
         };
       }
 
-      if (details === undefined && parentId === undefined &&
-          dependsOn === undefined && status === undefined && tags === undefined &&
-          actualHours === undefined) {
+      if (details === undefined && status === undefined && tags === undefined &&
+          actualHours === undefined && addSubtask === undefined && 
+          updateSubtask === undefined && removeSubtaskId === undefined) {
         return {
           content: [{ type: 'text' as const, text: 'Error: At least one field must be provided for update.' }],
           isError: true
@@ -498,56 +432,45 @@ function createUpdateTaskTool(
         };
       }
 
-      if (parentId !== undefined && parentId) {
-        if (parentId === id) {
-          return {
-            content: [{ type: 'text' as const, text: `Error: Task cannot be its own parent.` }],
-            isError: true
-          };
-        }
-
-        const newParentTask = await storage.getTask(parentId.trim());
-        if (!newParentTask) {
-          return {
-            content: [{ type: 'text' as const, text: `Error: Parent task with ID "${parentId}" not found.` }],
-            isError: true
-          };
-        }
-
-        const allDescendantIds = await getAllDescendants(storage, id);
-        if (allDescendantIds.includes(parentId)) {
-          return {
-            content: [{ type: 'text' as const, text: `Error: Cannot move task under its own descendant. This would create a circular hierarchy.` }],
-            isError: true
-          };
-        }
+      // Validate subtask operations
+      if (addSubtask && addSubtask.details.trim().length === 0) {
+        return {
+          content: [{ type: 'text' as const, text: 'Error: Subtask details must not be empty.' }],
+          isError: true
+        };
       }
 
-      if (dependsOn && dependsOn.length > 0) {
-        for (const depId of dependsOn) {
-          if (depId === id) {
-            return {
-              content: [{ type: 'text' as const, text: `Error: Task cannot depend on itself.` }],
-              isError: true
-            };
-          }
-          const depTask = await storage.getTask(depId);
-          if (!depTask) {
-            return {
-              content: [{ type: 'text' as const, text: `Error: Dependency task with ID "${depId}" not found.` }],
-              isError: true
-            };
-          }
+      if (updateSubtask) {
+        if (updateSubtask.id.trim().length === 0) {
+          return {
+            content: [{ type: 'text' as const, text: 'Error: Subtask ID is required for update.' }],
+            isError: true
+          };
+        }
+        const existingSubtask = existingTask.subtasks?.find(s => s.id === updateSubtask.id);
+        if (!existingSubtask) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: Subtask with ID "${updateSubtask.id}" not found in task "${id}".` }],
+            isError: true
+          };
         }
       }
 
       const updatedTask = await storage.updateTask(id, {
         details: details?.trim(),
-        parentId: parentId !== undefined ? parentId?.trim() : undefined,
-        dependsOn,
         status,
         tags,
         actualHours,
+        addSubtask: addSubtask ? {
+          details: addSubtask.details.trim(),
+          status: addSubtask.status,
+        } : undefined,
+        updateSubtask: updateSubtask ? {
+          id: updateSubtask.id.trim(),
+          details: updateSubtask.details?.trim(),
+          status: updateSubtask.status,
+        } : undefined,
+        removeSubtaskId: removeSubtaskId?.trim(),
       });
 
       if (!updatedTask) {
@@ -557,55 +480,44 @@ function createUpdateTaskTool(
         };
       }
 
-      const currentParent = updatedTask.parentId ? await storage.getTask(updatedTask.parentId) : null;
-      const taskLevel = updatedTask.level || 0;
-
       const changedFields: string[] = [];
       if (details !== undefined) changedFields.push('details');
-      if (parentId !== undefined) changedFields.push('parent relationship');
-      if (dependsOn !== undefined) changedFields.push('dependencies');
       if (status !== undefined) changedFields.push('status');
       if (tags !== undefined) changedFields.push('tags');
       if (actualHours !== undefined) changedFields.push('actual hours');
+      if (addSubtask !== undefined) changedFields.push('added subtask');
+      if (updateSubtask !== undefined) changedFields.push('updated subtask');
+      if (removeSubtaskId !== undefined) changedFields.push('removed subtask');
 
-      const levelIndicator = '  '.repeat(taskLevel) + '→';
-
-      let hierarchyPath: string;
-      if (currentParent) {
-        const ancestors = await storage.getTaskAncestors(updatedTask.id);
-        hierarchyPath = `${ancestors.map(a => a.id).join(' → ')} → ${updatedTask.id}`;
-      } else {
-        hierarchyPath = updatedTask.id;
-      }
+      const subtaskSummary = updatedTask.subtasks?.length 
+        ? `${countDoneSubtasks(updatedTask)}/${countSubtasks(updatedTask)} done`
+        : 'None';
 
       return {
         content: [{
           type: 'text' as const,
           text: `✅ Task updated successfully!
 
-  **${levelIndicator} ${updatedTask.id}**
-  ${currentParent ? `Parent: ${currentParent.id}` : 'Top-level task'}
-  Level: ${taskLevel} ${taskLevel === 0 ? '(Top-level)' : `(${taskLevel} level${taskLevel > 1 ? 's' : ''} deep)`}
-  Path: ${hierarchyPath}
+**${updatedTask.id}**
 
-  📋 **Task Properties:**
-  • Status: ${updatedTask.status}
-  • Tags: ${updatedTask.tags?.join(', ') || 'None'}
-  • Dependencies: ${updatedTask.dependsOn?.length ? updatedTask.dependsOn.join(', ') : 'None'}
-  • Actual Hours: ${updatedTask.actualHours || 'Not set'}
-  • Details: ${updatedTask.details}
-  • Last Updated: ${new Date(updatedTask.updatedAt).toLocaleString()}
+📋 **Task Properties:**
+• Status: ${updatedTask.status}
+• Tags: ${updatedTask.tags?.join(', ') || 'None'}
+• Actual Hours: ${updatedTask.actualHours || 'Not set'}
+• Subtasks: ${subtaskSummary}
+• Details: ${updatedTask.details}
+• Last Updated: ${new Date(updatedTask.updatedAt).toLocaleString()}
 
-  ✏️ **Updated fields:** ${changedFields.join(', ')}
+✏️ **Updated:** ${changedFields.join(', ')}
 
-  🎯 **Next Steps:**
-  ${parentId !== undefined ? '• Use `list_tasks` to see the updated hierarchy structure' : ''}
-  • Update progress using \`update_task\` as you work
-  ${taskLevel > 0 ? '• Consider breaking down further with create_task using this task as parentId' : ''}`
+🎯 **Next Steps:**
+• Continue adding subtasks with update_task
+• Mark subtasks as done to track progress
+• Update progress using \`update_task\``
         }]
       };
     } catch (error) {
-      logger.error('Error in cortex_update_task', error);
+      logger.error('Error in update_task', error);
       return {
         content: [{ type: 'text' as const, text: `Error updating task: ${error instanceof Error ? error.message : 'Unknown error'}` }],
         isError: true
@@ -614,17 +526,25 @@ function createUpdateTaskTool(
   };
 
   return {
-    name: 'cortex_update_task',
-    description: 'Update task properties including status, details, dependencies, and tags. Use this to mark progress and update task metadata.',
+    name: 'update_task',
+    description: 'Update task properties including status, details, tags, and manage subtasks. Use addSubtask to break down work, updateSubtask to update subtask status, and removeSubtaskId to remove subtasks.',
     parameters: {
       workingDirectory: wdSchema,
       id: z.string().describe('The unique identifier of the task to update'),
       details: z.string().optional().describe('Updated task description (optional)'),
-      parentId: z.string().optional().describe('Updated parent task ID for moving between hierarchy levels (optional)'),
-      dependsOn: z.array(z.string()).optional().describe('Updated array of task IDs that must be completed before this task'),
       status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated task status'),
       tags: z.array(z.string()).optional().describe('Updated tags for categorization and filtering'),
-      actualHours: z.number().min(0).optional().describe('Actual time spent on the task in hours')
+      actualHours: z.number().min(0).optional().describe('Actual time spent on the task in hours'),
+      addSubtask: z.object({
+        details: z.string().describe('Subtask description'),
+        status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Subtask status (defaults to pending)')
+      }).optional().describe('Add a new subtask to this task'),
+      updateSubtask: z.object({
+        id: z.string().describe('ID of the subtask to update'),
+        details: z.string().optional().describe('Updated subtask description'),
+        status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated subtask status')
+      }).optional().describe('Update an existing subtask'),
+      removeSubtaskId: z.string().optional().describe('ID of the subtask to remove')
     },
     handler: withErrorHandling(handler)
   };
@@ -662,7 +582,6 @@ function createDeleteTaskTool(
         };
       }
 
-      const childTasks = await storage.getTaskChildren(task.id);
       const deleted = await storage.deleteTask(id);
 
       if (!deleted) {
@@ -677,14 +596,14 @@ function createDeleteTaskTool(
           type: 'text' as const,
           text: `✅ Task deleted successfully!
 
-  **Deleted:** "${task.id}"
-  **Also deleted:** ${childTasks.length} child task(s)
+**Deleted:** "${task.id}"
+**Subtasks deleted:** ${countSubtasks(task)}
 
-  This action cannot be undone. All data associated with this task has been permanently removed.`
+This action cannot be undone. All data associated with this task and its subtasks has been permanently removed.`
         }]
       };
     } catch (error) {
-      logger.error('Error in cortex_delete_task', error);
+      logger.error('Error in delete_task', error);
       return {
         content: [{ type: 'text' as const, text: `Error deleting task: ${error instanceof Error ? error.message : 'Unknown error'}` }],
         isError: true
@@ -693,104 +612,12 @@ function createDeleteTaskTool(
   };
 
   return {
-    name: 'cortex_delete_task',
-    description: 'Delete a task and all its children. Requires confirmation to prevent accidental deletion.',
+    name: 'delete_task',
+    description: 'Delete a task and all its subtasks. Requires confirmation to prevent accidental deletion.',
     parameters: {
       workingDirectory: wdSchema,
       id: z.string().describe('The unique identifier of the task to delete'),
       confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
-    },
-    handler: withErrorHandling(handler)
-  };
-}
-
-// ==================== Move Task ====================
-
-function createMoveTaskTool(
-  wdSchema: z.ZodString,
-  config: StorageConfig,
-  createStorage: StorageFactory
-): ToolDefinition {
-  interface MoveParams {
-    workingDirectory: string;
-    taskId: string;
-    newParentId?: string;
-  }
-
-  const handler = async ({ workingDirectory, taskId, newParentId }: MoveParams) => {
-    try {
-      const storage = await createStorage(workingDirectory, config);
-
-      const task = await storage.getTask(taskId.trim());
-      if (!task) {
-        return {
-          content: [{ type: 'text' as const, text: `Error: Task with ID "${taskId}" not found. Use list_tasks to see available tasks.` }],
-          isError: true
-        };
-      }
-
-      const oldParent = task.parentId ? await storage.getTask(task.parentId) : null;
-      const newParent = newParentId ? await storage.getTask(newParentId.trim()) : null;
-
-      if (newParentId && !newParent) {
-        return {
-          content: [{ type: 'text' as const, text: `Error: New parent task with ID "${newParentId}" not found.` }],
-          isError: true
-        };
-      }
-
-      const movedTask = await storage.moveTask(taskId.trim(), newParentId?.trim());
-      if (!movedTask) {
-        return {
-          content: [{ type: 'text' as const, text: `Error: Failed to move task with ID "${taskId}".` }],
-          isError: true
-        };
-      }
-
-      const ancestors = await storage.getTaskAncestors(movedTask.id);
-      const oldPath = oldParent
-        ? `${oldParent.id} → ${task.id}`
-        : task.id;
-      const newPath = newParent
-        ? `${ancestors.map(a => a.id).join(' → ')} → ${movedTask.id}`
-        : movedTask.id;
-      const levelIndicator = '  '.repeat(movedTask.level || 0) + '→';
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: `✅ **Task Moved Successfully!**
-
-  **${levelIndicator} ${movedTask.id}**
-
-  📍 **Movement Summary:**
-  • From: ${oldPath}
-  • To: ${newPath}
-  • New Level: ${movedTask.level || 0} ${(movedTask.level || 0) === 0 ? '(Top-level)' : `(${movedTask.level} level${(movedTask.level || 0) > 1 ? 's' : ''} deep)`}
-  • New Parent: ${newParent ? `${newParent.id}` : 'None (Top-level)'}
-
-  🎯 **Next Steps:**
-  • Use \`list_tasks\` with \`showHierarchy: true\` to see the updated structure
-  • Continue organizing with \`move_task\` or \`update_task\`
-  • Add more nested tasks with \`create_task\` using parentId`
-        }]
-      };
-    } catch (error) {
-      logger.error('Error in cortex_move_task', error);
-      return {
-        content: [{ type: 'text' as const, text: `Error moving task: ${error instanceof Error ? error.message : 'Unknown error'}` }],
-        isError: true
-      };
-    }
-  };
-
-  return {
-    name: 'cortex_move_task',
-    description: 'Move a task to a different parent in the hierarchy. Set newParentId to move under another task, or leave empty to move to top level.',
-    parameters: {
-      workingDirectory: wdSchema,
-      taskId: z.string().describe('The unique identifier of the task to move'),
-      newParentId: z.string().optional().describe('The ID of the new parent task (optional - leave empty for top level)')
     },
     handler: withErrorHandling(handler)
   };

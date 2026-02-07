@@ -5,7 +5,11 @@ import {
   Task, 
   TaskHierarchy, 
   CreateTaskInput, 
-  UpdateTaskInput 
+  UpdateTaskInput,
+  Subtask,
+  AddSubtaskInput,
+  UpdateSubtaskInput,
+  generateNextSubtaskId
 } from '../models/task.js';
 import { 
   Artifact, 
@@ -36,26 +40,30 @@ import {
 } from '../../../utils/file-utils.js';
 import { sanitizeFileName, padNumber } from '../../../utils/string-utils.js';
 import { Cache, CacheKeys, InvalidationPatterns } from '../../../utils/cache.js';
-import { NotFoundError, StorageError, ConflictError } from '../../../errors/errors.js';
+import { NotFoundError, StorageError } from '../../../errors/errors.js';
 import { createLogger } from '../../../utils/logger.js';
 
 const logger = createLogger('file-storage');
 
 /**
- * File-based storage implementation using individual task folders
+ * File-based storage implementation - Simplified Model
  * 
  * Storage Structure:
- * - .cortex/tasks/{number}-{slug}/task.json - Individual task files
- * - .cortex/tasks/{number}-{slug}/{phase}.md - Artifact files
+ * - .cortex/tasks/{number}-{slug}/.task.json - Contains parent task + subtasks array
+ * - .cortex/tasks/{number}-{slug}/{phase}.md - Artifact files (for entire hierarchy)
+ * 
+ * Key Changes:
+ * - Subtasks are stored INSIDE the parent .task.json file
+ * - No separate folders for subtasks
+ * - No dependsOn field - simplified model
+ * - Single level nesting only (subtasks cannot have subtasks)
+ * - Artifacts belong to the entire task hierarchy
  * 
  * Features:
- * - Each task has its own folder with sequential numbering (001-, 002-, etc.)
- * - Task ID = folder name (e.g., '001-implement-auth') - serves as the task title
- * - ID generated from details field using intelligent extraction
- * - No index file - tasks discovered by scanning folders
- * - Atomic-ish file writes using temp files
- * - Unlimited task hierarchy via parentId
- * - In-memory caching with TTL for improved performance
+ * - Each parent task has its own folder with sequential numbering
+ * - Task ID = folder name (e.g., '001-implement-auth')
+ * - Atomic file writes using temp files
+ * - In-memory caching with TTL
  */
 export class FileStorage extends BaseStorage {
   private readonly workingDirectory: string;
@@ -171,7 +179,7 @@ export class FileStorage extends BaseStorage {
   }
 
   /**
-   * Get all task folder names (with caching)
+   * Get all task folder names (parent tasks only, with caching)
    */
   private async getTaskFolders(): Promise<string[]> {
     const now = Date.now();
@@ -212,6 +220,10 @@ export class FileStorage extends BaseStorage {
 
     const task = await readJsonFileOrNull<Task>(this.getTaskFilePath(taskId));
     if (task) {
+      // Ensure subtasks array exists
+      if (!task.subtasks) {
+        task.subtasks = [];
+      }
       this.taskCache.set(CacheKeys.task(taskId), task);
     }
     return task;
@@ -230,72 +242,45 @@ export class FileStorage extends BaseStorage {
     this.invalidateTaskFoldersCache();
   }
 
-  /**
-   * Calculate task level in hierarchy
-   */
-  private calculateTaskLevel(task: Task, allTasks: readonly Task[]): number {
-    if (!task.parentId) return 0;
-
-    let level = 0;
-    let currentParentId: string | undefined = task.parentId;
-    const visited = new Set<string>();
-
-    while (currentParentId && !visited.has(currentParentId)) {
-      visited.add(currentParentId);
-      const parent = allTasks.find(t => t.id === currentParentId);
-      if (!parent) break;
-      level++;
-      currentParentId = parent.parentId;
-    }
-
-    return level;
-  }
-
   // ==================== Task Operations ====================
 
-  async getTasks(parentId?: string): Promise<readonly Task[]> {
+  /**
+   * Get all parent tasks (subtasks are inside each task)
+   */
+  async getTasks(): Promise<readonly Task[]> {
     const folders = await this.getTaskFolders();
     const tasks: Task[] = [];
     
-    // Load all tasks (utilizing cache)
+    // Load all parent tasks (utilizing cache)
     for (const folder of folders) {
       const task = await this.loadTask(folder);
       if (task) {
+        // Ensure subtasks array exists
+        if (!task.subtasks) {
+          task.subtasks = [];
+        }
         tasks.push(task);
       }
-    }
-
-    // Calculate levels for all tasks
-    for (const task of tasks) {
-      task.level = this.calculateTaskLevel(task, tasks);
-    }
-
-    // Filter by parentId if specified
-    if (parentId !== undefined) {
-      return tasks.filter(t => t.parentId === parentId);
     }
 
     return tasks;
   }
 
+  /**
+   * Get a single task by ID
+   */
   async getTask(id: string): Promise<Task | null> {
     const task = await this.loadTask(id);
-    if (task) {
-      const allTasks = await this.getTasks();
-      task.level = this.calculateTaskLevel(task, allTasks);
+    if (task && !task.subtasks) {
+      task.subtasks = [];
     }
     return task;
   }
 
+  /**
+   * Create a new parent task
+   */
   async createTask(input: CreateTaskInput): Promise<Task> {
-    // Validate parent exists if specified
-    if (input.parentId) {
-      const parent = await this.getTask(input.parentId);
-      if (!parent) {
-        throw NotFoundError.parent(input.parentId);
-      }
-    }
-
     // Get next number and generate task ID
     const nextNumber = await this.getNextNumber();
     const taskId = this.generateTaskId(input.details, nextNumber);
@@ -304,37 +289,66 @@ export class FileStorage extends BaseStorage {
     const task: Task = {
       id: taskId,
       details: input.details.trim(),
-      parentId: input.parentId?.trim(),
       createdAt: now,
       updatedAt: now,
-      dependsOn: input.dependsOn || [],
       status: input.status || 'pending',
       tags: input.tags || [],
+      subtasks: [],
     };
     
     // Save task
     await this.saveTask(taskId, task);
 
-    // Calculate level
-    const allTasks = await this.getTasks();
-    task.level = this.calculateTaskLevel(task, allTasks);
-
     logger.debug('Task created', { taskId });
     return task;
   }
 
+  /**
+   * Update an existing task
+   * Supports updating parent fields and subtask operations
+   */
   async updateTask(id: string, updates: UpdateTaskInput): Promise<Task | null> {
     const task = await this.loadTask(id);
     if (!task) return null;
 
-    // Validate new parent if changing
-    if (updates.parentId !== undefined && updates.parentId) {
-      const parent = await this.getTask(updates.parentId);
-      if (!parent) {
-        throw NotFoundError.parent(updates.parentId);
+    // Ensure subtasks array exists
+    if (!task.subtasks) {
+      task.subtasks = [];
+    }
+
+    let subtasks = [...task.subtasks];
+    let updated = false;
+
+    // Handle addSubtask operation
+    if (updates.addSubtask) {
+      const newSubtask: Subtask = {
+        id: generateNextSubtaskId(subtasks),
+        details: updates.addSubtask.details.trim(),
+        status: updates.addSubtask.status || 'pending',
+      };
+      subtasks.push(newSubtask);
+      updated = true;
+    }
+
+    // Handle updateSubtask operation
+    if (updates.updateSubtask) {
+      const subtaskIndex = subtasks.findIndex(s => s.id === updates.updateSubtask!.id);
+      if (subtaskIndex !== -1) {
+        subtasks[subtaskIndex] = {
+          ...subtasks[subtaskIndex],
+          details: updates.updateSubtask.details?.trim() ?? subtasks[subtaskIndex].details,
+          status: updates.updateSubtask.status ?? subtasks[subtaskIndex].status,
+        };
+        updated = true;
       }
-      if (await this.wouldCreateCircularReference(id, updates.parentId)) {
-        throw ConflictError.circularReference(id, updates.parentId);
+    }
+
+    // Handle removeSubtaskId operation
+    if (updates.removeSubtaskId) {
+      const initialLength = subtasks.length;
+      subtasks = subtasks.filter(s => s.id !== updates.removeSubtaskId);
+      if (subtasks.length !== initialLength) {
+        updated = true;
       }
     }
 
@@ -342,11 +356,10 @@ export class FileStorage extends BaseStorage {
     const updatedTask: Task = {
       ...task,
       details: updates.details?.trim() ?? task.details,
-      parentId: updates.parentId !== undefined ? updates.parentId?.trim() : task.parentId,
-      dependsOn: updates.dependsOn ?? task.dependsOn,
       status: updates.status ?? task.status,
       tags: updates.tags ?? task.tags,
       actualHours: updates.actualHours ?? task.actualHours,
+      subtasks,
       updatedAt: new Date().toISOString(),
     };
 
@@ -354,22 +367,18 @@ export class FileStorage extends BaseStorage {
     await this.saveTask(id, updatedTask);
     this.taskCache.invalidate(InvalidationPatterns.task(id));
 
-    // Calculate level
-    const allTasks = await this.getTasks();
-    updatedTask.level = this.calculateTaskLevel(updatedTask, allTasks);
-
     logger.debug('Task updated', { taskId: id });
     return updatedTask;
   }
 
+  /**
+   * Delete a task and all its subtasks
+   */
   async deleteTask(id: string): Promise<boolean> {
     const task = await this.loadTask(id);
     if (!task) return false;
 
-    // Delete all child tasks recursively first
-    await this.deleteTasksByParent(id);
-
-    // Delete the task folder
+    // Delete the entire task folder (includes .task.json, artifacts, and effectively all subtasks)
     await deleteDirectory(this.getTaskFolderPath(id));
 
     // Invalidate caches
@@ -381,119 +390,109 @@ export class FileStorage extends BaseStorage {
     return true;
   }
 
-  async deleteTasksByParent(parentId: string): Promise<number> {
-    const allTasks = await this.getTasks();
-    const childTasks = allTasks.filter(t => t.parentId === parentId);
-    let deletedCount = 0;
+  // ==================== Subtask Operations ====================
 
-    // Recursively delete children first
-    for (const child of childTasks) {
-      deletedCount += await this.deleteTasksByParent(child.id);
+  /**
+   * Add a subtask to a parent task
+   */
+  async addSubtask(taskId: string, input: AddSubtaskInput): Promise<Subtask | null> {
+    const task = await this.loadTask(taskId);
+    if (!task) return null;
+
+    const newSubtask: Subtask = {
+      id: generateNextSubtaskId(task.subtasks || []),
+      details: input.details.trim(),
+      status: input.status || 'pending',
+    };
+
+    const updatedTask: Task = {
+      ...task,
+      subtasks: [...(task.subtasks || []), newSubtask],
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.saveTask(taskId, updatedTask);
+    this.taskCache.set(CacheKeys.task(taskId), updatedTask);
+
+    logger.debug('Subtask added', { taskId, subtaskId: newSubtask.id });
+    return newSubtask;
+  }
+
+  /**
+   * Update a subtask
+   */
+  async updateSubtask(taskId: string, input: UpdateSubtaskInput): Promise<Subtask | null> {
+    const task = await this.loadTask(taskId);
+    if (!task) return null;
+
+    const subtasks = task.subtasks || [];
+    const subtaskIndex = subtasks.findIndex(s => s.id === input.id);
+    
+    if (subtaskIndex === -1) return null;
+
+    const updatedSubtask: Subtask = {
+      ...subtasks[subtaskIndex],
+      details: input.details?.trim() ?? subtasks[subtaskIndex].details,
+      status: input.status ?? subtasks[subtaskIndex].status,
+    };
+
+    const updatedSubtasks = [...subtasks];
+    updatedSubtasks[subtaskIndex] = updatedSubtask;
+
+    const updatedTask: Task = {
+      ...task,
+      subtasks: updatedSubtasks,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.saveTask(taskId, updatedTask);
+    this.taskCache.set(CacheKeys.task(taskId), updatedTask);
+
+    logger.debug('Subtask updated', { taskId, subtaskId: input.id });
+    return updatedSubtask;
+  }
+
+  /**
+   * Remove a subtask by ID
+   */
+  async removeSubtask(taskId: string, subtaskId: string): Promise<boolean> {
+    const task = await this.loadTask(taskId);
+    if (!task) return false;
+
+    const initialLength = (task.subtasks || []).length;
+    const updatedSubtasks = (task.subtasks || []).filter(s => s.id !== subtaskId);
+
+    if (updatedSubtasks.length === initialLength) {
+      return false; // Subtask not found
     }
 
-    // Delete direct children
-    for (const child of childTasks) {
-      await deleteDirectory(this.getTaskFolderPath(child.id));
-      this.taskCache.delete(CacheKeys.task(child.id));
-      deletedCount++;
-    }
+    const updatedTask: Task = {
+      ...task,
+      subtasks: updatedSubtasks,
+      updatedAt: new Date().toISOString(),
+    };
 
-    return deletedCount;
+    await this.saveTask(taskId, updatedTask);
+    this.taskCache.set(CacheKeys.task(taskId), updatedTask);
+
+    logger.debug('Subtask removed', { taskId, subtaskId });
+    return true;
   }
 
   // ==================== Task Hierarchy Operations ====================
 
-  async getTaskHierarchy(parentId?: string): Promise<readonly TaskHierarchy[]> {
-    const allTasks = await this.getTasks();
-    const tasks = parentId !== undefined
-      ? allTasks.filter(t => t.parentId === parentId)
-      : allTasks.filter(t => !t.parentId);
-
-    const hierarchies: TaskHierarchy[] = [];
-
-    for (const task of tasks) {
-      const children = this.buildTaskHierarchySync(task.id, allTasks);
-      hierarchies.push({
-        task,
-        children,
-        depth: task.level || 0
-      });
-    }
-
-    return hierarchies;
-  }
-
-  private buildTaskHierarchySync(taskId: string, allTasks: readonly Task[]): readonly TaskHierarchy[] {
-    const children = allTasks.filter(t => t.parentId === taskId);
-    const hierarchies: TaskHierarchy[] = [];
-
-    for (const child of children) {
-      const grandchildren = this.buildTaskHierarchySync(child.id, allTasks);
-      hierarchies.push({
-        task: child,
-        children: grandchildren,
-        depth: child.level || 0
-      });
-    }
-
-    return hierarchies;
-  }
-
-  async getTaskChildren(taskId: string): Promise<readonly Task[]> {
-    const allTasks = await this.getTasks();
-    return allTasks.filter(t => t.parentId === taskId);
-  }
-
-  async getTaskAncestors(taskId: string): Promise<readonly Task[]> {
-    const ancestors: Task[] = [];
-    let currentTask = await this.getTask(taskId);
-
-    while (currentTask?.parentId) {
-      const parent = await this.getTask(currentTask.parentId);
-      if (!parent) break;
-      ancestors.unshift(parent);
-      currentTask = parent;
-    }
-
-    return ancestors;
-  }
-
-  async getTaskDescendants(taskId: string): Promise<readonly Task[]> {
-    const descendants: Task[] = [];
-    const children = await this.getTaskChildren(taskId);
+  /**
+   * Get task hierarchy (all parent tasks with their subtasks)
+   */
+  async getTaskHierarchy(): Promise<readonly TaskHierarchy[]> {
+    const tasks = await this.getTasks();
     
-    for (const child of children) {
-      descendants.push(child);
-      const childDescendants = await this.getTaskDescendants(child.id);
-      descendants.push(...childDescendants);
-    }
-    
-    return descendants;
+    return tasks.map(task => ({
+      task,
+      depth: 0
+    }));
   }
 
-  async moveTask(taskId: string, newParentId?: string): Promise<Task | null> {
-    if (newParentId && await this.wouldCreateCircularReference(taskId, newParentId)) {
-      throw ConflictError.circularReference(taskId, newParentId);
-    }
-
-    return this.updateTask(taskId, { parentId: newParentId });
-  }
-
-  async wouldCreateCircularReference(taskId: string, newParentId: string): Promise<boolean> {
-    let currentParentId: string | undefined = newParentId;
-    const visited = new Set<string>();
-
-    while (currentParentId && !visited.has(currentParentId)) {
-      if (currentParentId === taskId) {
-        return true;
-      }
-      visited.add(currentParentId);
-      const parent = await this.getTask(currentParentId);
-      currentParentId = parent?.parentId;
-    }
-
-    return false;
-  }
   // ==================== Artifact Operations ====================
 
   /**

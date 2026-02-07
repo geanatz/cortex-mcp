@@ -1,7 +1,7 @@
 /**
  * Artifact types for the orchestration workflow
  * 
- * Artifacts are phase-specific knowledge files stored alongside task.json
+ * Artifacts are phase-specific knowledge files stored alongside .task.json
  * Each phase (explore, search, plan, build, test) produces an artifact
  * that subsequent phases can read and build upon.
  */

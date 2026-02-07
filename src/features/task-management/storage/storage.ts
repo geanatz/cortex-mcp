@@ -1,4 +1,4 @@
-import { Task, TaskHierarchy, TaskFilters, CreateTaskInput, UpdateTaskInput } from '../models/task.js';
+import { Task, TaskHierarchy, TaskFilters, CreateTaskInput, UpdateTaskInput, Subtask, AddSubtaskInput, UpdateSubtaskInput } from '../models/task.js';
 import { CURRENT_STORAGE_VERSION } from '../models/config.js';
 import { 
   Artifact, 
@@ -33,15 +33,16 @@ export interface StorageStats {
 /**
  * Storage interface for the task management system
  * 
- * Tasks stored in .cortex/tasks/{number}-{slug}/task.json
- * Task ID = folder name (e.g., '001-implement-auth') - serves as the task title
- * ID generated intelligently from details field (first 50 chars, sanitized)
- * No index file - tasks discovered by scanning folders
- * Supports unlimited task hierarchy via parentId
+ * Simplified storage model:
+ * - Each parent task has its own folder: .cortex/tasks/{number}-{slug}/
+ * - .task.json contains parent task + subtasks array
+ * - Subtasks are NOT separate folders - they're stored inline
+ * - No dependsOn - simplified model
+ * - Single level nesting only
  * 
  * Artifacts stored in .cortex/tasks/{number}-{slug}/{phase}.md
  * Each phase (explore, search, plan, build, test) has its own artifact file
- * Artifacts use YAML frontmatter for metadata + markdown body for content
+ * Artifacts belong to the entire task hierarchy (parent + subtasks)
  */
 export interface Storage {
   /**
@@ -58,9 +59,9 @@ export interface Storage {
   // ==================== Task Operations ====================
 
   /**
-   * Get all tasks, optionally filtered by parentId
+   * Get all parent tasks
    */
-  getTasks(parentId?: string): Promise<readonly Task[]>;
+  getTasks(): Promise<readonly Task[]>;
 
   /**
    * Get tasks with filters
@@ -73,61 +74,48 @@ export interface Storage {
   getTask(id: string): Promise<Task | null>;
 
   /**
-   * Create a new task
+   * Create a new parent task
    */
   createTask(input: CreateTaskInput): Promise<Task>;
 
   /**
-   * Update an existing task
+   * Update an existing task (parent fields or subtask operations)
    */
   updateTask(id: string, updates: UpdateTaskInput): Promise<Task | null>;
 
   /**
-   * Delete a task and all its children
+   * Delete a task and all its subtasks
    */
   deleteTask(id: string): Promise<boolean>;
-
-  /**
-   * Delete all tasks under a parent
-   */
-  deleteTasksByParent(parentId: string): Promise<number>;
 
   /**
    * Check if a task exists
    */
   taskExists(id: string): Promise<boolean>;
 
+  // ==================== Subtask Operations ====================
+
+  /**
+   * Add a subtask to a parent task
+   */
+  addSubtask(taskId: string, input: AddSubtaskInput): Promise<Subtask | null>;
+
+  /**
+   * Update a subtask
+   */
+  updateSubtask(taskId: string, input: UpdateSubtaskInput): Promise<Subtask | null>;
+
+  /**
+   * Remove a subtask by ID
+   */
+  removeSubtask(taskId: string, subtaskId: string): Promise<boolean>;
+
   // ==================== Task Hierarchy Operations ====================
 
   /**
-   * Get task hierarchy starting from a parent (or root)
+   * Get task hierarchy (parent with subtasks)
    */
-  getTaskHierarchy(parentId?: string): Promise<readonly TaskHierarchy[]>;
-
-  /**
-   * Get direct children of a task
-   */
-  getTaskChildren(taskId: string): Promise<readonly Task[]>;
-
-  /**
-   * Get all ancestors of a task (parent chain)
-   */
-  getTaskAncestors(taskId: string): Promise<readonly Task[]>;
-
-  /**
-   * Get all descendants of a task (recursive children)
-   */
-  getTaskDescendants(taskId: string): Promise<readonly Task[]>;
-
-  /**
-   * Move a task to a different parent
-   */
-  moveTask(taskId: string, newParentId?: string): Promise<Task | null>;
-
-  /**
-   * Check if moving would create a circular reference
-   */
-  wouldCreateCircularReference(taskId: string, newParentId: string): Promise<boolean>;
+  getTaskHierarchy(): Promise<readonly TaskHierarchy[]>;
 
   // ==================== Artifact Operations ====================
 
@@ -191,18 +179,15 @@ export abstract class BaseStorage implements Storage {
   protected initialized = false;
 
   abstract initialize(): Promise<void>;
-  abstract getTasks(parentId?: string): Promise<readonly Task[]>;
+  abstract getTasks(): Promise<readonly Task[]>;
   abstract getTask(id: string): Promise<Task | null>;
   abstract createTask(input: CreateTaskInput): Promise<Task>;
   abstract updateTask(id: string, updates: UpdateTaskInput): Promise<Task | null>;
   abstract deleteTask(id: string): Promise<boolean>;
-  abstract deleteTasksByParent(parentId: string): Promise<number>;
-  abstract getTaskHierarchy(parentId?: string): Promise<readonly TaskHierarchy[]>;
-  abstract getTaskChildren(taskId: string): Promise<readonly Task[]>;
-  abstract getTaskAncestors(taskId: string): Promise<readonly Task[]>;
-  abstract getTaskDescendants(taskId: string): Promise<readonly Task[]>;
-  abstract moveTask(taskId: string, newParentId?: string): Promise<Task | null>;
-  abstract wouldCreateCircularReference(taskId: string, newParentId: string): Promise<boolean>;
+  abstract addSubtask(taskId: string, input: AddSubtaskInput): Promise<Subtask | null>;
+  abstract updateSubtask(taskId: string, input: UpdateSubtaskInput): Promise<Subtask | null>;
+  abstract removeSubtask(taskId: string, subtaskId: string): Promise<boolean>;
+  abstract getTaskHierarchy(): Promise<readonly TaskHierarchy[]>;
   abstract getArtifact(taskId: string, phase: ArtifactPhase): Promise<Artifact | null>;
   abstract getAllArtifacts(taskId: string): Promise<TaskArtifacts>;
   abstract createArtifact(taskId: string, phase: ArtifactPhase, input: CreateArtifactInput): Promise<Artifact>;
@@ -221,7 +206,7 @@ export abstract class BaseStorage implements Storage {
   }
 
   async getTasksFiltered(filters: TaskFilters): Promise<readonly Task[]> {
-    let tasks = await this.getTasks(filters.parentId);
+    let tasks = await this.getTasks();
     
     if (filters.status) {
       const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
@@ -231,14 +216,6 @@ export abstract class BaseStorage implements Storage {
     if (filters.tags && filters.tags.length > 0) {
       tasks = tasks.filter(t => 
         t.tags && filters.tags!.some(tag => t.tags!.includes(tag))
-      );
-    }
-    
-    if (filters.hasDependencies !== undefined) {
-      tasks = tasks.filter(t => 
-        filters.hasDependencies 
-          ? (t.dependsOn && t.dependsOn.length > 0)
-          : (!t.dependsOn || t.dependsOn.length === 0)
       );
     }
     

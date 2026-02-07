@@ -75,7 +75,7 @@ function createCreateHandler(
 
       const phaseUpper = phase.charAt(0).toUpperCase() + phase.slice(1);
       const truncated = artifact.content.length > 500 
-        ? artifact.content.substring(0, 500) + '...\n\n*(truncated - use cortex_get_task to see full content)*'
+        ? artifact.content.substring(0, 500) + '...\n\n*(truncated - use get_task to see full content)*'
         : artifact.content;
 
       return {
@@ -119,7 +119,7 @@ function createUpdateHandler(
         return {
           content: [{
             type: 'text' as const,
-            text: `Error: ${phaseUpper} artifact not found for task "${taskId}". Use cortex_create_${phase} to create it first.`
+            text: `Error: ${phaseUpper} artifact not found for task "${taskId}". Use create_${phase} to create it first.`
           }],
           isError: true
         };
@@ -200,7 +200,7 @@ export function createArtifactTools(
 
   for (const phase of ARTIFACT_PHASES) {
     tools.push({
-      name: `cortex_create_${phase}`,
+      name: `create_${phase}`,
       description: OPERATION_DESCRIPTIONS.create[phase],
       parameters: {
         workingDirectory: workingDirectorySchema,
@@ -214,7 +214,7 @@ export function createArtifactTools(
     });
 
     tools.push({
-      name: `cortex_update_${phase}`,
+      name: `update_${phase}`,
       description: OPERATION_DESCRIPTIONS.update[phase],
       parameters: {
         workingDirectory: workingDirectorySchema,
@@ -228,7 +228,7 @@ export function createArtifactTools(
     });
 
     tools.push({
-      name: `cortex_delete_${phase}`,
+      name: `delete_${phase}`,
       description: OPERATION_DESCRIPTIONS.delete[phase],
       parameters: {
         workingDirectory: workingDirectorySchema,
