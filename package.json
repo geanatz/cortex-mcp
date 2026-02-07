@@ -1,6 +1,6 @@
 {
   "name": "@geanatz/cortex-mcp",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "An MCP server for task-based orchestration workflows with phase artifacts for agentic development",
   "main": "dist/index.js",
   "type": "module",
