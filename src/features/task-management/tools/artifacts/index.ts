@@ -12,7 +12,7 @@ import {
 } from '../../models/artifact.js';
 import { ToolDefinition } from '../../tools/base/types.js';
 import { withErrorHandling } from '../../tools/base/handlers.js';
-import { workingDirectorySchema, taskIdSchema } from '../../tools/base/schemas.js';
+import { createWorkingDirectorySchema, taskIdSchema, artifactContentSchema, artifactErrorSchema, retriesSchema } from '../../tools/base/schemas.js';
 
 const logger = createLogger('artifact-tools');
 
@@ -197,7 +197,7 @@ export function createArtifactTools(
   createStorage: StorageFactory
 ): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
-  const wdSchema = workingDirectorySchema.describe(getWorkingDirectoryDescription(config));
+  const wdSchema = createWorkingDirectorySchema(getWorkingDirectoryDescription(config));
 
   for (const phase of ARTIFACT_PHASES) {
     tools.push({
@@ -206,10 +206,10 @@ export function createArtifactTools(
       parameters: {
         workingDirectory: wdSchema,
         taskId: taskIdSchema.describe('The ID of the task to create the artifact for'),
-        content: z.string().describe(`Markdown content for the ${phase} artifact. ${PHASE_DESCRIPTIONS[phase]}`),
+        content: artifactContentSchema.describe(`Markdown content for the ${phase} artifact. ${PHASE_DESCRIPTIONS[phase]}`),
         status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional().describe('Status of this phase (defaults to "completed")'),
-        retries: z.number().min(0).optional().describe('Number of retry attempts for this phase'),
-        error: z.string().optional().describe('Error message if status is "failed"')
+        retries: retriesSchema.optional().describe('Number of retry attempts for this phase'),
+        error: artifactErrorSchema.optional().describe('Error message if status is "failed"')
       },
       handler: withErrorHandling(createCreateHandler(phase, config, createStorage))
     });
@@ -220,10 +220,10 @@ export function createArtifactTools(
       parameters: {
         workingDirectory: wdSchema,
         taskId: taskIdSchema.describe('The ID of the task to update the artifact for'),
-        content: z.string().optional().describe(`Updated markdown content for the ${phase} artifact`),
+        content: artifactContentSchema.optional().describe(`Updated markdown content for the ${phase} artifact`),
         status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional().describe('Updated status of this phase'),
-        retries: z.number().min(0).optional().describe('Updated number of retry attempts'),
-        error: z.string().optional().describe('Updated error message')
+        retries: retriesSchema.optional().describe('Updated number of retry attempts'),
+        error: artifactErrorSchema.optional().describe('Updated error message')
       },
       handler: withErrorHandling(createUpdateHandler(phase, config, createStorage))
     });

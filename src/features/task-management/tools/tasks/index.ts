@@ -4,7 +4,7 @@ import { Task, TaskHierarchy } from '../../models/task.js';
 import { ARTIFACT_PHASES, ArtifactPhase, Artifact } from '../../models/artifact.js';
 import { ToolDefinition } from '../base/types.js';
 import { withErrorHandling } from '../base/handlers.js';
-import { workingDirectorySchema } from '../base/schemas.js';
+import { createWorkingDirectorySchema } from '../base/schemas.js';
 import { StorageConfig, getWorkingDirectoryDescription } from '../../../../utils/storage-config.js';
 import { createLogger } from '../../../../utils/logger.js';
 
@@ -62,7 +62,7 @@ export function createTaskTools(
   config: StorageConfig,
   createStorage: StorageFactory
 ): ToolDefinition[] {
-  const wdSchema = workingDirectorySchema.describe(getWorkingDirectoryDescription(config));
+  const wdSchema = createWorkingDirectorySchema(getWorkingDirectoryDescription(config));
 
   return [
     createListTasksTool(wdSchema, config, createStorage),
@@ -77,7 +77,7 @@ export function createTaskTools(
 // ==================== List Tasks ====================
 
 function createListTasksTool(
-  wdSchema: z.ZodString,
+  wdSchema: z.ZodType<string>,
   config: StorageConfig,
   createStorage: StorageFactory
 ): ToolDefinition {
@@ -221,7 +221,7 @@ ${taskList}
 // ==================== Create Task ====================
 
 function createCreateTaskTool(
-  wdSchema: z.ZodString,
+  wdSchema: z.ZodType<string>,
   config: StorageConfig,
   createStorage: StorageFactory
 ): ToolDefinition {
@@ -287,7 +287,7 @@ function createCreateTaskTool(
 // ==================== Get Task ====================
 
 function createGetTaskTool(
-  wdSchema: z.ZodString,
+  wdSchema: z.ZodType<string>,
   config: StorageConfig,
   createStorage: StorageFactory
 ): ToolDefinition {
@@ -381,7 +381,7 @@ ${artifactSummary}`;
 // ==================== Update Task ====================
 
 function createUpdateTaskTool(
-  wdSchema: z.ZodString,
+  wdSchema: z.ZodType<string>,
   config: StorageConfig,
   createStorage: StorageFactory
 ): ToolDefinition {
@@ -553,7 +553,7 @@ function createUpdateTaskTool(
 // ==================== Delete Task ====================
 
 function createDeleteTaskTool(
-  wdSchema: z.ZodString,
+  wdSchema: z.ZodType<string>,
   config: StorageConfig,
   createStorage: StorageFactory
 ): ToolDefinition {

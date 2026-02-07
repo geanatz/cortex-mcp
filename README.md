@@ -9,6 +9,7 @@ An MCP (Model Context Protocol) server for managing task-based workflows with ar
 - **File-Based Storage** - All data stored in `.cortex/` directory with no database required
 - **In-Memory Caching** - High-performance caching layer with TTL for frequently accessed tasks
 - **Structured Logging** - Comprehensive logging with configurable levels
+- **Production Ready** - Path traversal protection, input validation, size limits, error handling
 
 ## Installation
 
@@ -84,10 +85,10 @@ Or for global mode:
 ```
 Tool: create_task
 Parameters:
-  - workingDirectory: path where tasks are stored
-  - details: task description (generates task ID)
+  - workingDirectory: path where tasks are stored (absolute path, required)
+  - details: task description (generates task ID), max 2000 characters
   - status (optional): pending | in_progress | done
-  - tags (optional): categorization tags
+  - tags (optional): categorization tags, max 20 tags, max 50 chars each
 ```
 
 ### Managing Subtasks
@@ -101,6 +102,7 @@ Parameters:
   - addSubtask: { details: "Subtask description", status: "pending" }
   - updateSubtask: { id: "1", status: "done" }
   - removeSubtaskId: "1"
+  - actualHours (optional): number, max 10000 hours
 ```
 
 ### Managing Artifacts
@@ -115,11 +117,12 @@ Each task can have artifacts for 5 phases:
 ```
 Tools: create_{phase}, update_{phase}, delete_{phase}
 Parameters:
-  - workingDirectory: project directory
+  - workingDirectory: project directory (absolute path)
   - taskId: which task to attach artifact to
-  - content: markdown content
+  - content: markdown content, max 10MB
   - status: pending | in-progress | completed | failed | skipped
-  - retries, error: optional metadata
+  - retries (optional): integer, max 100
+  - error (optional): error message, max 10,000 characters
 ```
 
 ## Storage Format
@@ -166,12 +169,12 @@ Tasks are stored in `.cortex/tasks/{number}-{slug}/` directories:
 ```typescript
 interface Task {
   id: string;                    // Task ID (e.g., "001-implement-auth")
-  details: string;               // Full task description
+  details: string;               // Full task description (max 2000 chars)
   status: 'pending' | 'in_progress' | 'done';
   createdAt: string;             // ISO 8601 timestamp
   updatedAt: string;             // Last modification timestamp
-  tags?: string[];               // Categorization tags
-  actualHours?: number;          // Time tracking
+  tags?: string[];               // Categorization tags (max 20, max 50 chars each)
+  actualHours?: number;          // Time tracking (max 10000 hours)
   subtasks: Subtask[];           // Array of subtasks
 }
 ```
@@ -180,7 +183,7 @@ interface Task {
 ```typescript
 interface Subtask {
   id: string;                    // Simple ID ("1", "2", etc.)
-  details: string;               // Subtask description
+  details: string;               // Subtask description (max 1000 chars)
   status: 'pending' | 'in_progress' | 'done';
 }
 ```
@@ -193,10 +196,10 @@ interface Artifact {
     status: 'pending' | 'in-progress' | 'completed' | 'failed' | 'skipped';
     createdAt: string;            // ISO 8601
     updatedAt: string;            // ISO 8601
-    retries?: number;             // Attempt count
-    error?: string;               // Error message if status=failed
+    retries?: number;             // Attempt count (max 100)
+    error?: string;               // Error message (max 10000 chars)
   }
-  content: string;               // Markdown content
+  content: string;               // Markdown content (max 10MB)
 }
 ```
 
@@ -234,9 +237,41 @@ interface Artifact {
 ### Command-Line Flags
 - `--claude` - Use global directory mode (~/.cortex/)
 
+### Security Considerations
+
+This server implements several security measures:
+
+1. **Path Traversal Protection**: All paths are validated to prevent `../` sequences and directory escape
+2. **Input Validation**: All inputs are validated using Zod schemas with strict limits
+3. **Size Limits**: 
+   - Task details: max 2000 characters
+   - Artifact content: max 10MB
+   - Tags: max 20 tags, max 50 characters each
+   - Error messages: max 10,000 characters
+4. **Working Directory Validation**: Must be absolute paths without traversal sequences
+5. **Atomic File Writes**: Uses temp files and atomic rename to prevent data corruption
+6. **Safe Error Messages**: Internal paths are not exposed in error messages
+
+### Validation Limits
+
+| Field | Limit |
+|-------|-------|
+| Task ID | 100 characters |
+| Task details | 2000 characters |
+| Subtask details | 1000 characters |
+| Tags | 20 tags max, 50 chars each |
+| Actual hours | Max 10,000 |
+| Artifact content | 10MB max |
+| Error messages | 10,000 characters max |
+| Retries | Max 100 |
+| Working directory path | 4096 characters max |
+
 ## Development
 
 ```bash
+# Install dependencies
+npm install
+
 # Build TypeScript
 npm run build
 
@@ -258,15 +293,45 @@ npm start
 - **No circular dependencies** - Easy to understand data flow
 - **Abstract storage** - File-based implementation, easily extensible
 - **MCP-compliant** - Full compliance with Model Context Protocol specification
+- **Security-first** - Path validation, input sanitization, size limits
+
+## Error Handling
+
+The server uses a comprehensive error handling strategy:
+
+- **AppError hierarchy** - Typed errors with context
+- **Zod validation** - Schema validation at the boundary
+- **Graceful degradation** - Continues operating on non-fatal errors
+- **Structured logging** - All errors logged with context to stderr
+- **Safe shutdown** - SIGINT/SIGTERM handlers for graceful exit
+
+## Troubleshooting
+
+### Connection closed errors
+- Check that the working directory exists and is accessible
+- Verify the working directory is an absolute path
+- Ensure no path traversal sequences (../) in workingDirectory
+
+### Permission denied errors
+- Verify write permissions to the working directory
+- Check if the .cortex directory is owned by the current user
+
+### Storage not initializing
+- Ensure the path is an absolute path (not relative)
+- Check that parent directories exist and are writable
 
 ## Version
 
-Current version: **5.0.0**
+Current version: **5.0.2**
 
-- v5.0.0: Simplified model - subtasks stored inline, removed dependencies, removed move_task
-- v4.0.0: Complete refactor with artifact support and optimized build
-- v3.x: Legacy memory features (deprecated)
-- v1.x: Initial implementation
+### Changelog
+
+- **v5.0.2**: Security hardening - path traversal protection, input validation, size limits
+- **v5.0.1**: Added error handlers for connection stability
+- **v5.0.0**: Simplified model - subtasks stored inline, removed dependencies, removed move_task
+- **v4.0.0**: Complete refactor with artifact support and optimized build
+- **v3.x**: Legacy memory features (deprecated)
+- **v1.x**: Initial implementation
 
 ## License
 
@@ -278,4 +343,16 @@ Geanatz
 
 ## Contributing
 
-Contributions welcome!
+Contributions welcome! Please ensure:
+- Code follows existing patterns
+- All inputs are validated
+- Security considerations are addressed
+- Tests pass (when test suite is added)
+
+## Security
+
+For security issues, please email directly rather than opening a public issue.
+
+### Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it responsibly by contacting the maintainer directly.
