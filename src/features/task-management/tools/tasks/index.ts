@@ -208,11 +208,11 @@ ${taskList}
 
   return {
     name: 'list_tasks',
-    description: 'List all tasks with hierarchical display including subtasks. Perfect for understanding current workflow state and task organization.',
+    description: 'List all tasks with hierarchical display showing progress, status, and subtasks. Essential for understanding current workflow state, tracking progress, and identifying next steps in the development process.',
     parameters: {
       workingDirectory: wdSchema,
-      showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format with subtasks (default: true)'),
-      includeDone: z.boolean().optional().describe('Include done tasks in results (default: true)')
+      showHierarchy: z.boolean().optional().describe('Display tasks in hierarchical tree format with subtasks to visualize work breakdown (default: true)'),
+      includeDone: z.boolean().optional().describe('Include completed tasks in the results to see historical progress (default: true)')
     },
     handler: withErrorHandling(handler)
   };
@@ -273,12 +273,12 @@ function createCreateTaskTool(
 
   return {
     name: 'create_task',
-    description: 'Create a new task for the orchestration workflow. Task ID is auto-generated from details. Use update_task with addSubtask to create subtasks.',
+    description: 'Create a new parent task to organize related work items and establish a clear development objective. Automatically generates unique task ID from description and initializes tracking metadata. Use to begin structured development on a specific feature or fix.',
     parameters: {
       workingDirectory: wdSchema,
-      details: z.string().describe('Task description - used to generate the task ID (e.g., "Implement authentication" becomes "001-implement-authentication")'),
-      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Initial task status (defaults to pending)'),
-      tags: z.array(z.string()).optional().describe('Tags for categorization and filtering')
+      details: z.string().describe('Comprehensive task description that clearly defines the objective, requirements, and expected outcome (e.g., "Implement user authentication with JWT tokens and refresh mechanism")'),
+      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Initial task status reflecting readiness to start (defaults to pending)'),
+      tags: z.array(z.string()).optional().describe('Category tags for organizing and filtering related tasks (e.g., ["auth", "security", "backend"])')
     },
     handler: withErrorHandling(handler)
   };
@@ -369,10 +369,10 @@ ${artifactSummary}`;
 
   return {
     name: 'get_task',
-    description: 'Retrieve complete task details including all subtasks and phase artifacts (explore, search, plan, build, test). Essential for understanding current task state and accumulated knowledge.',
+    description: 'Retrieve complete task details including all subtasks, status, artifacts, and progress metrics. Essential for understanding current task state, reviewing accumulated knowledge across all phases, and determining next steps in the development workflow.',
     parameters: {
       workingDirectory: wdSchema,
-      id: z.string().describe('The unique identifier of the task to retrieve')
+      id: z.string().describe('The unique identifier of the task to retrieve (e.g., "001-implement-auth")')
     },
     handler: withErrorHandling(handler)
   };
@@ -527,24 +527,24 @@ function createUpdateTaskTool(
 
   return {
     name: 'update_task',
-    description: 'Update task properties including status, details, tags, and manage subtasks. Use addSubtask to break down work, updateSubtask to update subtask status, and removeSubtaskId to remove subtasks.',
+    description: 'Update task properties to reflect progress, adjust scope, or modify requirements. Manage subtasks to break down work, track time spent, and update status. Use to maintain accurate task tracking throughout the development lifecycle.',
     parameters: {
       workingDirectory: wdSchema,
       id: z.string().describe('The unique identifier of the task to update'),
-      details: z.string().optional().describe('Updated task description (optional)'),
-      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated task status'),
-      tags: z.array(z.string()).optional().describe('Updated tags for categorization and filtering'),
-      actualHours: z.number().min(0).optional().describe('Actual time spent on the task in hours'),
+      details: z.string().optional().describe('Updated comprehensive task description if requirements change or scope adjusts'),
+      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated task status reflecting current progress state'),
+      tags: z.array(z.string()).optional().describe('Updated category tags for organizing and filtering related tasks'),
+      actualHours: z.number().min(0).optional().describe('Actual time spent on the task in hours for tracking and estimation'),
       addSubtask: z.object({
-        details: z.string().describe('Subtask description'),
-        status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Subtask status (defaults to pending)')
-      }).optional().describe('Add a new subtask to this task'),
+        details: z.string().describe('Detailed subtask description that defines a specific, actionable work item'),
+        status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Initial subtask status (defaults to pending)')
+      }).optional().describe('Add a new subtask to break down the parent task into smaller, manageable work items'),
       updateSubtask: z.object({
-        id: z.string().describe('ID of the subtask to update'),
-        details: z.string().optional().describe('Updated subtask description'),
-        status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated subtask status')
-      }).optional().describe('Update an existing subtask'),
-      removeSubtaskId: z.string().optional().describe('ID of the subtask to remove')
+        id: z.string().describe('ID of the specific subtask to update'),
+        details: z.string().optional().describe('Updated subtask description if requirements or approach changes'),
+        status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated subtask status reflecting completion progress')
+      }).optional().describe('Update an existing subtask to reflect progress, adjust description, or change status'),
+      removeSubtaskId: z.string().optional().describe('ID of the subtask to remove from the task breakdown')
     },
     handler: withErrorHandling(handler)
   };
@@ -613,11 +613,11 @@ This action cannot be undone. All data associated with this task and its subtask
 
   return {
     name: 'delete_task',
-    description: 'Delete a task and all its subtasks. Requires confirmation to prevent accidental deletion.',
+    description: 'Permanently delete a task and all its associated subtasks, artifacts, and progress data. Use only when a task is obsolete, no longer needed, or was created by mistake. Requires explicit confirmation to prevent accidental data loss.',
     parameters: {
       workingDirectory: wdSchema,
-      id: z.string().describe('The unique identifier of the task to delete'),
-      confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
+      id: z.string().describe('The unique identifier of the task to delete completely (e.g., "001-implement-auth")'),
+      confirm: z.boolean().describe('Must be set to true to confirm this destructive operation and acknowledge permanent data loss')
     },
     handler: withErrorHandling(handler)
   };

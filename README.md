@@ -84,11 +84,12 @@ Or for global mode:
 
 ```
 Tool: create_task
+Description: Create a new parent task to organize related work items and establish a clear development objective. Automatically generates unique task ID from description and initializes tracking metadata. Use to begin structured development on a specific feature or fix.
 Parameters:
   - workingDirectory: path where tasks are stored (absolute path, required)
-  - details: task description (generates task ID), max 2000 characters
+  - details: comprehensive task description that clearly defines the objective, requirements, and expected outcome, max 2000 characters
   - status (optional): pending | in_progress | done
-  - tags (optional): categorization tags, max 20 tags, max 50 chars each
+  - tags (optional): category tags for organizing and filtering related tasks, max 20 tags, max 50 chars each
 ```
 
 ### Managing Subtasks
@@ -97,32 +98,34 @@ Subtasks are created using `update_task` with the `addSubtask` parameter:
 
 ```
 Tool: update_task
+Description: Update task properties to reflect progress, adjust scope, or modify requirements. Manage subtasks to break down work, track time spent, and update status. Use to maintain accurate task tracking throughout the development lifecycle.
 Parameters:
   - id: parent task ID
-  - addSubtask: { details: "Subtask description", status: "pending" }
-  - updateSubtask: { id: "1", status: "done" }
+  - addSubtask: { details: "Detailed subtask description that defines a specific, actionable work item", status: "pending" }
+  - updateSubtask: { id: "1", details: "Updated subtask description if requirements change", status: "done" }
   - removeSubtaskId: "1"
   - actualHours (optional): number, max 10000 hours
 ```
 
 ### Managing Artifacts
 
-Each task can have artifacts for 5 phases:
-- **explore**: Codebase analysis and discovery findings
-- **search**: External research and documentation findings
-- **plan**: Implementation approach and step-by-step plan
-- **build**: Implementation changes and modifications made
-- **test**: Test execution results and verification status
+Each task can have artifacts for 5 phases with specific purposes:
+
+- **explore**: Capture codebase analysis findings, architectural decisions, and discovered dependencies. Essential for understanding the current state before making changes.
+- **search**: Document research on best practices, API documentation, and external solutions. Use when gathering information to inform implementation decisions.
+- **plan**: Define the step-by-step approach for task completion, including implementation strategy and required resources. Use to establish a clear roadmap before execution.
+- **build**: Record actual implementation changes, code modifications, and development progress. Critical for tracking what was done and why.
+- **test**: Document verification results, test outcomes, and quality assurance findings. Use to validate that changes meet requirements and don't introduce regressions.
 
 ```
 Tools: create_{phase}, update_{phase}, delete_{phase}
 Parameters:
   - workingDirectory: project directory (absolute path)
   - taskId: which task to attach artifact to
-  - content: markdown content, max 10MB
+  - content: markdown content describing the work performed in this phase, max 10MB
   - status: pending | in-progress | completed | failed | skipped
   - retries (optional): integer, max 100
-  - error (optional): error message, max 10,000 characters
+  - error (optional): error message if status is failed, max 10,000 characters
 ```
 
 ## Storage Format
@@ -206,28 +209,37 @@ interface Artifact {
 ## Available Tools
 
 ### Task Management
-- `create_task` - Create a new parent task
-- `list_tasks` - List all tasks with subtasks
-- `get_task` - Get task details including subtasks and artifacts
-- `update_task` - Update task and manage subtasks
-- `delete_task` - Delete task and all its subtasks
+- `create_task` - Create a new parent task to organize related work items and establish a clear development objective. Automatically generates unique task ID from description and initializes tracking metadata. Use to begin structured development on a specific feature or fix.
+- `list_tasks` - List all tasks with hierarchical display showing progress, status, and subtasks. Essential for understanding current workflow state, tracking progress, and identifying next steps in the development process.
+- `get_task` - Retrieve complete task details including all subtasks, status, artifacts, and progress metrics. Essential for understanding current task state, reviewing accumulated knowledge across all phases, and determining next steps in the development workflow.
+- `update_task` - Update task properties to reflect progress, adjust scope, or modify requirements. Manage subtasks to break down work, track time spent, and update status. Use to maintain accurate task tracking throughout the development lifecycle.
+- `delete_task` - Permanently delete a task and all its associated subtasks, artifacts, and progress data. Use only when a task is obsolete, no longer needed, or was created by mistake. Requires explicit confirmation to prevent accidental data loss.
 
 ### Artifact Management
-- `create_explore` - Create explore phase artifact
-- `update_explore` - Update explore phase artifact
-- `delete_explore` - Delete explore phase artifact
-- `create_search` - Create search phase artifact
-- `update_search` - Update search phase artifact
-- `delete_search` - Delete search phase artifact
-- `create_plan` - Create plan phase artifact
-- `update_plan` - Update plan phase artifact
-- `delete_plan` - Delete plan phase artifact
-- `create_build` - Create build phase artifact
-- `update_build` - Update build phase artifact
-- `delete_build` - Delete build phase artifact
-- `create_test` - Create test phase artifact
-- `update_test` - Update test phase artifact
-- `delete_test` - Delete test phase artifact
+#### Explore Phase
+- `create_explore` - Create the explore artifact to capture codebase analysis findings, architectural decisions, and discovered dependencies. Essential for understanding the current state before making changes.
+- `update_explore` - Update the explore artifact to refine analysis findings, add newly discovered information, or correct previous assessments about the codebase.
+- `delete_explore` - Delete the explore artifact to reset the analysis phase and start fresh analysis of the codebase from scratch.
+
+#### Search Phase
+- `create_search` - Create the search artifact to document research on best practices, API documentation, and external solutions. Use when gathering information to inform implementation decisions.
+- `update_search` - Update the search artifact to incorporate new research findings, updated best practices, or additional external resources discovered during implementation.
+- `delete_search` - Delete the search artifact to clear previous research and initiate a new investigation of external resources and solutions.
+
+#### Plan Phase
+- `create_plan` - Create the plan artifact to define the step-by-step approach for task completion, including implementation strategy and required resources. Use to establish a clear roadmap before execution.
+- `update_plan` - Update the plan artifact to adjust the implementation approach, modify steps, or adapt the strategy based on new information or changing requirements.
+- `delete_plan` - Delete the plan artifact to abandon the current implementation strategy and develop a new approach from scratch.
+
+#### Build Phase
+- `create_build` - Create the build artifact to record actual implementation changes, code modifications, and development progress. Critical for tracking what was done and why.
+- `update_build` - Update the build artifact to reflect additional implementation changes, code adjustments, or progress updates during the development process.
+- `delete_build` - Delete the build artifact to clear the implementation record and restart the development process for the task.
+
+#### Test Phase
+- `create_test` - Create the test artifact to document verification results, test outcomes, and quality assurance findings. Use to validate that changes meet requirements and don't introduce regressions.
+- `update_test` - Update the test artifact to record additional test results, verification outcomes, or quality metrics as testing continues throughout the development cycle.
+- `delete_test` - Delete the test artifact to reset verification results and begin a new round of quality assurance testing.
 
 ## Configuration
 
@@ -322,10 +334,11 @@ The server uses a comprehensive error handling strategy:
 
 ## Version
 
-Current version: **5.0.2**
+Current version: **5.0.3**
 
 ### Changelog
 
+- **v5.0.3**: Enhanced AI agent tool descriptions and optimized parameter documentation for better LLM understanding
 - **v5.0.2**: Security hardening - path traversal protection, input validation, size limits
 - **v5.0.1**: Added error handlers for connection stability
 - **v5.0.0**: Simplified model - subtasks stored inline, removed dependencies, removed move_task

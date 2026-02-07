@@ -29,9 +29,9 @@ export function getVersion(): string {
       }
     }
     
-    return '5.0.2'; // Fallback version — keep in sync with package.json
+    return '5.0.3'; // Fallback version — keep in sync with package.json
   } catch {
-    return '5.0.2'; // Fallback version — keep in sync with package.json
+    return '5.0.3'; // Fallback version — keep in sync with package.json
   }
 }
 

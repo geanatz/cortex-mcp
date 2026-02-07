@@ -171,25 +171,25 @@ export const PHASE_DESCRIPTIONS: Record<ArtifactPhase, string> = {
  */
 export const OPERATION_DESCRIPTIONS = {
   create: {
-    explore: 'Create the explore artifact with codebase analysis findings. Use after analyzing the repository to document relevant files, logic entry points, and unknowns.',
-    search: 'Create the search artifact with external research findings. Use after web research to document patterns, best practices, and solutions found.',
-    plan: 'Create the plan artifact with the implementation approach. Use after designing the solution to document step-by-step implementation plan.',
-    build: 'Create the build artifact documenting implementation changes. Use after making code changes to document what was modified and why.',
-    test: 'Create the test artifact with verification results. Use after running tests to document results, pass/fail status, and any issues found.'
+    explore: 'Create the explore artifact to capture codebase analysis findings, architectural decisions, and discovered dependencies. Essential for understanding the current state before making changes.',
+    search: 'Create the search artifact to document research on best practices, API documentation, and external solutions. Use when gathering information to inform implementation decisions.',
+    plan: 'Create the plan artifact to define the step-by-step approach for task completion, including implementation strategy and required resources. Use to establish a clear roadmap before execution.',
+    build: 'Create the build artifact to record actual implementation changes, code modifications, and development progress. Critical for tracking what was done and why.',
+    test: 'Create the test artifact to document verification results, test outcomes, and quality assurance findings. Use to validate that changes meet requirements and don\'t introduce regressions.'
   },
   update: {
-    explore: 'Update the explore artifact with additional analysis findings or corrections.',
-    search: 'Update the search artifact with additional research findings or corrections.',
-    plan: 'Update the plan artifact with revised approach or additional implementation steps.',
-    build: 'Update the build artifact with additional changes or corrections to the implementation record.',
-    test: 'Update the test artifact with additional test results or corrections.'
+    explore: 'Update the explore artifact to refine analysis findings, add newly discovered information, or correct previous assessments about the codebase.',
+    search: 'Update the search artifact to incorporate new research findings, updated best practices, or additional external resources discovered during implementation.',
+    plan: 'Update the plan artifact to adjust the implementation approach, modify steps, or adapt the strategy based on new information or changing requirements.',
+    build: 'Update the build artifact to reflect additional implementation changes, code adjustments, or progress updates during the development process.',
+    test: 'Update the test artifact to record additional test results, verification outcomes, or quality metrics as testing continues throughout the development cycle.'
   },
   delete: {
-    explore: 'Delete the explore artifact. Use to reset the exploration phase for re-analysis.',
-    search: 'Delete the search artifact. Use to reset the research phase for new research.',
-    plan: 'Delete the plan artifact. Use to reset the planning phase for a new approach.',
-    build: 'Delete the build artifact. Use to reset the build phase record.',
-    test: 'Delete the test artifact. Use to reset the testing phase for re-verification.'
+    explore: 'Delete the explore artifact to reset the analysis phase and start fresh analysis of the codebase from scratch.',
+    search: 'Delete the search artifact to clear previous research and initiate a new investigation of external resources and solutions.',
+    plan: 'Delete the plan artifact to abandon the current implementation strategy and develop a new approach from scratch.',
+    build: 'Delete the build artifact to clear the implementation record and restart the development process for the task.',
+    test: 'Delete the test artifact to reset verification results and begin a new round of quality assurance testing.'
   }
 } as const;
 
