@@ -77,6 +77,8 @@ jspm_packages/
 *.tmp
 *.temp
 
-# Package lock files (choose one based on your preference)
-# package-lock.json  # Uncomment if using yarn
-# yarn.lock          # Uncomment if using npm
+# Package lock files
+# For libraries published to npm: commit only package.json, not lock files
+# This allows users to resolve dependencies flexibly
+package-lock.json
+yarn.lock
