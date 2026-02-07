@@ -2,24 +2,22 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { FileStorage } from './features/task-management/storage/file-storage.js';
 import { Storage } from './features/task-management/storage/storage.js';
 import { getVersion } from './utils/version.js';
-import { StorageConfig, resolveWorkingDirectory, getWorkingDirectoryDescription } from './utils/storage-config.js';
-import { createErrorResponse } from './utils/response-builder.js';
+import { StorageConfig, resolveWorkingDirectory } from './utils/storage-config.js';
 import { createLogger } from './utils/logger.js';
-import { z } from 'zod';
 
-// Task tools
+// Tool factories
 import { createTaskTools } from './features/task-management/tools/tasks/index.js';
 import { createArtifactTools } from './features/task-management/tools/artifacts/index.js';
 
 const logger = createLogger('server');
 
 /**
- * Storage factory type
+ * Storage factory type — creates an initialized Storage for a given working directory.
  */
 type StorageFactory = (workingDirectory: string, config: StorageConfig) => Promise<Storage>;
 
 /**
- * Create storage instance for a specific working directory
+ * Create and initialize a FileStorage instance for a specific working directory.
  */
 async function createStorage(workingDirectory: string, config: StorageConfig): Promise<FileStorage> {
   const resolvedDirectory = resolveWorkingDirectory(workingDirectory, config);
@@ -29,193 +27,34 @@ async function createStorage(workingDirectory: string, config: StorageConfig): P
 }
 
 /**
- * Create and configure the MCP server for task management with artifact support
- * 
- * Version 4.0.0 - Complete refactor focusing on task-based orchestration workflows
- * - Removed memory features (deprecated)
- * - Added artifact support (explore, search, plan, build, test)
- * - Each task folder contains task.json + phase artifacts (*.md)
- * - Enhanced caching and performance optimizations
- * - Improved error handling with typed errors
+ * Create and configure the MCP server for task management with artifact support.
+ *
+ * All tools follow a uniform registration pattern:
+ * 1. Factory functions return ToolDefinition[] with name, description, parameters, handler
+ * 2. Each tool creates its own storage instance per-call via the shared StorageFactory
+ * 3. Tools are registered in a single loop — no inline tool declarations
  */
 export async function createServer(config: StorageConfig = { useGlobalDirectory: false }): Promise<McpServer> {
   logger.info('Creating MCP server', { config });
-  
-  // Create MCP server with dynamic version from package.json
+
   const server = new McpServer({
     name: '@geanatz/cortex-mcp',
     version: getVersion()
   });
 
-  // Common schema for working directory
-  const workingDirectorySchema = z.string().describe(getWorkingDirectoryDescription(config));
-
-// Register task management tools using factory
-  // Create all task tools using factory and register them individually
-  // We'll create each tool separately to avoid type conflicts
-
-  // Helper function to create and execute a specific task tool
-  async function executeTaskTool<T>(
-    workingDirectory: string,
-    config: StorageConfig,
-    toolName: string,
-    params: T
-  ) {
-    try {
-      const storage = await createStorage(workingDirectory, config);
-      const tools = createTaskTools(storage);
-      const tool = tools.find(t => t.name === toolName);
-      if (!tool) {
-        throw new Error(`Tool ${toolName} not found`);
-      }
-      return await (tool.handler as any)(params);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // List tasks tool
-  server.tool(
-    'cortex_list_tasks',
-    'List all tasks with hierarchical display. Filter by parentId for subtrees. Perfect for understanding current workflow state and task organization.',
-    {
-      workingDirectory: workingDirectorySchema,
-      parentId: z.string().optional().describe('Filter to tasks under this parent (optional)'),
-      showHierarchy: z.boolean().optional().describe('Show tasks in hierarchical tree format (default: true)'),
-      includeDone: z.boolean().optional().describe('Include done tasks in results (default: true)')
-    },
-    async ({ workingDirectory, parentId, showHierarchy, includeDone }) => {
-      try {
-        return await executeTaskTool(workingDirectory, config, 'list_tasks', { parentId, showHierarchy, includeDone });
-      } catch (error) {
-        logger.error('Error in cortex_list_tasks', error);
-        return createErrorResponse(error);
-      }
-    }
-  );
-
-  // Create task tool
-  server.tool(
-    'cortex_create_task',
-    'Create a new task for the orchestration workflow. Task ID is auto-generated from details. Use parentId to create subtasks for hierarchical organization.',
-    {
-      workingDirectory: workingDirectorySchema,
-      details: z.string().describe('Task description - used to generate the task ID (e.g., "Implement authentication" becomes "001-implement-authentication")'),
-      parentId: z.string().optional().describe('Parent task ID for creating subtasks (optional - creates top-level task if not specified)'),
-      dependsOn: z.array(z.string()).optional().describe('Array of task IDs that must be completed before this task'),
-      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Initial task status (defaults to pending)'),
-      tags: z.array(z.string()).optional().describe('Tags for categorization and filtering')
-    },
-    async ({ workingDirectory, details, parentId, dependsOn, status, tags }) => {
-      try {
-        return await executeTaskTool(workingDirectory, config, 'create_task', { details, parentId, dependsOn, status, tags });
-      } catch (error) {
-        logger.error('Error in cortex_create_task', error);
-        return createErrorResponse(error);
-      }
-    }
-  );
-
-  // Get task tool
-  server.tool(
-    'cortex_get_task',
-    'Retrieve complete task details including all phase artifacts (explore, search, plan, build, test). Essential for understanding current task state and accumulated knowledge.',
-    {
-      workingDirectory: workingDirectorySchema,
-      id: z.string().describe('The unique identifier of the task to retrieve')
-    },
-    async ({ workingDirectory, id }) => {
-      try {
-        return await executeTaskTool(workingDirectory, config, 'get_task', { id });
-      } catch (error) {
-        logger.error('Error in cortex_get_task', error);
-        return createErrorResponse(error);
-      }
-    }
-  );
-
-  // Update task tool
-  server.tool(
-    'cortex_update_task',
-    'Update task properties including status, details, dependencies, and tags. Use this to mark progress and update task metadata.',
-    {
-      workingDirectory: workingDirectorySchema,
-      id: z.string().describe('The unique identifier of the task to update'),
-      details: z.string().optional().describe('Updated task description (optional)'),
-      parentId: z.string().optional().describe('Updated parent task ID for moving between hierarchy levels (optional)'),
-      dependsOn: z.array(z.string()).optional().describe('Updated array of task IDs that must be completed before this task'),
-      status: z.enum(['pending', 'in_progress', 'done']).optional().describe('Updated task status'),
-      tags: z.array(z.string()).optional().describe('Updated tags for categorization and filtering'),
-      actualHours: z.number().min(0).optional().describe('Actual time spent on the task in hours')
-    },
-    async ({ workingDirectory, id, details, parentId, dependsOn, status, tags, actualHours }: {
-      workingDirectory: string;
-      id: string;
-      details?: string;
-      parentId?: string;
-      dependsOn?: string[];
-      status?: 'pending' | 'in_progress' | 'done';
-      tags?: string[];
-      actualHours?: number;
-    }) => {
-      try {
-        return await executeTaskTool(workingDirectory, config, 'update_task', { id, details, parentId, dependsOn, status, tags, actualHours });
-      } catch (error) {
-        logger.error('Error in cortex_update_task', error);
-        return createErrorResponse(error);
-      }
-    }
-  );
-
-  // Delete task tool
-  server.tool(
-    'cortex_delete_task',
-    'Delete a task and all its children. Requires confirmation to prevent accidental deletion.',
-    {
-      workingDirectory: workingDirectorySchema,
-      id: z.string().describe('The unique identifier of the task to delete'),
-      confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
-    },
-    async ({ workingDirectory, id, confirm }) => {
-      try {
-        return await executeTaskTool(workingDirectory, config, 'delete_task', { id, confirm });
-      } catch (error) {
-        logger.error('Error in cortex_delete_task', error);
-        return createErrorResponse(error);
-      }
-    }
-  );
-
-  // Move task tool
-  server.tool(
-    'cortex_move_task',
-    'Move a task to a different parent in the hierarchy. Set newParentId to move under another task, or leave empty to move to top level.',
-    {
-      workingDirectory: workingDirectorySchema,
-      taskId: z.string().describe('The unique identifier of the task to move'),
-      newParentId: z.string().optional().describe('The ID of the new parent task (optional - leave empty for top level)')
-    },
-    async ({ workingDirectory, taskId, newParentId }: { workingDirectory: string; taskId: string; newParentId?: string }) => {
-      try {
-        return await executeTaskTool(workingDirectory, config, 'move_task', { taskId, newParentId });
-      } catch (error) {
-        logger.error('Error in cortex_move_task', error);
-        return createErrorResponse(error);
-      }
-    }
-  );
-
-  
-
-  // Register artifact tools (15 tools: create/update/delete for each phase)
+  // Build all tool definitions from factories
+  const taskTools = createTaskTools(config, createStorage);
   const artifactTools = createArtifactTools(config, createStorage);
-  for (const tool of artifactTools) {
+  const allTools = [...taskTools, ...artifactTools];
+
+  // Register every tool uniformly
+  for (const tool of allTools) {
     server.tool(tool.name, tool.description, tool.parameters, tool.handler);
   }
 
-  logger.info('MCP server created successfully', { 
-    taskTools: 6, 
-    artifactTools: artifactTools.length 
+  logger.info('MCP server created successfully', {
+    taskTools: taskTools.length,
+    artifactTools: artifactTools.length
   });
 
   return server;

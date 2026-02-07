@@ -6,7 +6,7 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Alibaba",
       "options": {
-        "apiKey": "wQc1edMxB6iwpoRY7SVuiW8hMRwAq1fO2rlhxewevK2H3jvnAgWv1xss-Yon-Lj59uyFg5OGCj6nW1mZMPL3Kw",
+        "apiKey": "VQtmviNvR2blaclTFRNQV8GN_BlAcu-8FS5cneNnOqQNRnDlBf79zGBRp6JyDtpUvcmALv1-iK1PMCyl5wYeHg",
         "baseURL": "https://portal.qwen.ai/v1"
       },
       "models": {
@@ -219,7 +219,7 @@
         "/home/geanatz/Repos/cortex-mcp/dist/index.js"
       ]
     },
-    "exa": {
+    "search": {
       "type": "remote",
       "enabled": true,
       "url": "https://mcp.exa.ai/mcp"

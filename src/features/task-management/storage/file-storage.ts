@@ -5,15 +5,14 @@ import {
   Task, 
   TaskHierarchy, 
   CreateTaskInput, 
-  UpdateTaskInput,
-  TaskStatus 
+  UpdateTaskInput 
 } from '../models/task.js';
 import { 
   Artifact, 
   CreateArtifactInput,
   UpdateArtifactInput,
   ArtifactPhase, 
-  ArtifactStatus,
+  type ArtifactStatus,
   TaskArtifacts, 
   ARTIFACT_PHASES,
   getArtifactFilename 

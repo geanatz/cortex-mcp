@@ -167,4 +167,4 @@ Geanatz
 
 ## Contributing
 
-Contributions welcome! See REFACTORING_GUIDE.md for architecture details.
+Contributions welcome!

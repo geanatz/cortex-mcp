@@ -18,7 +18,7 @@ export function getVersion(): string {
     
     return packageJson.version;
   } catch {
-    return '1.4.0'; // Fallback version
+    return '4.0.0'; // Fallback version — keep in sync with package.json
   }
 }
 

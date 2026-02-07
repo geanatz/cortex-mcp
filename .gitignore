@@ -9,7 +9,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs
-build/
+dist/
 *.tsbuildinfo
 
 # Environment variables
@@ -80,4 +80,3 @@ jspm_packages/
 # Package lock files (choose one based on your preference)
 # package-lock.json  # Uncomment if using yarn
 # yarn.lock          # Uncomment if using npm
-dist/
