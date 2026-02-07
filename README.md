@@ -334,11 +334,12 @@ The server uses a comprehensive error handling strategy:
 
 ## Version
 
-Current version: **5.0.3**
+Current version: **5.0.4**
 
 ### Changelog
 
-- **v5.0.3**: Enhanced AI agent tool descriptions and optimized parameter documentation for better LLM understanding
+- **v5.0.4**: Enhanced AI agent tool descriptions and optimized parameter documentation for better LLM understanding (expanded descriptions beyond v5.0.3)
+- **v5.0.3**: Initial release with improved tool descriptions
 - **v5.0.2**: Security hardening - path traversal protection, input validation, size limits
 - **v5.0.1**: Added error handlers for connection stability
 - **v5.0.0**: Simplified model - subtasks stored inline, removed dependencies, removed move_task
