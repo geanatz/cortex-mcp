@@ -35,27 +35,42 @@ async function createStorage(workingDirectory: string, config: StorageConfig): P
  * 3. Tools are registered in a single loop — no inline tool declarations
  */
 export async function createServer(config: StorageConfig = { useGlobalDirectory: false }): Promise<McpServer> {
-  logger.info('Creating MCP server', { config });
+  try {
+    logger.info('Creating MCP server', { config });
 
-  const server = new McpServer({
-    name: '@geanatz/cortex-mcp',
-    version: getVersion()
-  });
+    const version = getVersion();
+    logger.debug('Loaded version', { version });
 
-  // Build all tool definitions from factories
-  const taskTools = createTaskTools(config, createStorage);
-  const artifactTools = createArtifactTools(config, createStorage);
-  const allTools = [...taskTools, ...artifactTools];
+    const server = new McpServer({
+      name: '@geanatz/cortex-mcp',
+      version
+    });
 
-  // Register every tool uniformly
-  for (const tool of allTools) {
-    server.tool(tool.name, tool.description, tool.parameters, tool.handler);
+    // Build all tool definitions from factories
+    const taskTools = createTaskTools(config, createStorage);
+    const artifactTools = createArtifactTools(config, createStorage);
+    const allTools = [...taskTools, ...artifactTools];
+
+    logger.debug('Registering tools', { count: allTools.length });
+
+    // Register every tool uniformly
+    for (const tool of allTools) {
+      try {
+        server.tool(tool.name, tool.description, tool.parameters, tool.handler);
+      } catch (error) {
+        logger.error(`Failed to register tool: ${tool.name}`, error);
+        throw error;
+      }
+    }
+
+    logger.info('MCP server created successfully', {
+      taskTools: taskTools.length,
+      artifactTools: artifactTools.length
+    });
+
+    return server;
+  } catch (error) {
+    logger.error('Failed to create MCP server', error);
+    throw error;
   }
-
-  logger.info('MCP server created successfully', {
-    taskTools: taskTools.length,
-    artifactTools: artifactTools.length
-  });
-
-  return server;
 }

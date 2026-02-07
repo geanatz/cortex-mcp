@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { Storage } from '../../storage/storage.js';
 import { StorageConfig, getWorkingDirectoryDescription } from '../../../../utils/storage-config.js';
 import { createErrorResponse } from '../../../../utils/response-builder.js';
@@ -11,7 +12,6 @@ import {
 } from '../../models/artifact.js';
 import { ToolDefinition } from '../../tools/base/types.js';
 import { withErrorHandling } from '../../tools/base/handlers.js';
-import { z } from 'zod';
 import { workingDirectorySchema, taskIdSchema } from '../../tools/base/schemas.js';
 
 const logger = createLogger('artifact-tools');
@@ -197,13 +197,14 @@ export function createArtifactTools(
   createStorage: StorageFactory
 ): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
+  const wdSchema = workingDirectorySchema.describe(getWorkingDirectoryDescription(config));
 
   for (const phase of ARTIFACT_PHASES) {
     tools.push({
       name: `create_${phase}`,
       description: OPERATION_DESCRIPTIONS.create[phase],
       parameters: {
-        workingDirectory: workingDirectorySchema,
+        workingDirectory: wdSchema,
         taskId: taskIdSchema.describe('The ID of the task to create the artifact for'),
         content: z.string().describe(`Markdown content for the ${phase} artifact. ${PHASE_DESCRIPTIONS[phase]}`),
         status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional().describe('Status of this phase (defaults to "completed")'),
@@ -217,7 +218,7 @@ export function createArtifactTools(
       name: `update_${phase}`,
       description: OPERATION_DESCRIPTIONS.update[phase],
       parameters: {
-        workingDirectory: workingDirectorySchema,
+        workingDirectory: wdSchema,
         taskId: taskIdSchema.describe('The ID of the task to update the artifact for'),
         content: z.string().optional().describe(`Updated markdown content for the ${phase} artifact`),
         status: z.enum(['pending', 'in-progress', 'completed', 'failed', 'skipped']).optional().describe('Updated status of this phase'),
@@ -231,7 +232,7 @@ export function createArtifactTools(
       name: `delete_${phase}`,
       description: OPERATION_DESCRIPTIONS.delete[phase],
       parameters: {
-        workingDirectory: workingDirectorySchema,
+        workingDirectory: wdSchema,
         taskId: taskIdSchema.describe('The ID of the task to delete the artifact from'),
         confirm: z.boolean().describe('Must be set to true to confirm deletion (safety measure)')
       },

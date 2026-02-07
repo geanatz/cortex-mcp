@@ -9,14 +9,27 @@ import { dirname, join } from 'path';
 export function getVersion(): string {
   try {
     const currentDir = dirname(fileURLToPath(import.meta.url));
-    const packageJsonPath = join(currentDir, '..', '..', 'package.json');
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
     
-    if (!packageJson.version) {
-      throw new Error('Version not found in package.json');
+    // Try multiple paths to find package.json
+    const pathsToTry = [
+      join(currentDir, '..', '..', 'package.json'),  // dist/utils/version.js -> ../../package.json
+      join(currentDir, '..', '..', '..', 'package.json'),  // src/utils/version.ts -> ../../../package.json
+      join(process.cwd(), 'package.json'),  // fallback to cwd
+    ];
+    
+    for (const packageJsonPath of pathsToTry) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
+        if (packageJson.version) {
+          return packageJson.version;
+        }
+      } catch {
+        // Try next path
+        continue;
+      }
     }
     
-    return packageJson.version;
+    return '5.0.0'; // Fallback version — keep in sync with package.json
   } catch {
     return '5.0.0'; // Fallback version — keep in sync with package.json
   }

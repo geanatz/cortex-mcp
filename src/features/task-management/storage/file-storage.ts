@@ -107,10 +107,16 @@ export class FileStorage extends BaseStorage {
 
     // Validate working directory exists
     if (!await fileExists(this.workingDirectory)) {
-      throw StorageError.initializationError(
-        this.workingDirectory,
-        `Working directory does not exist or is not accessible: ${this.workingDirectory}`
-      );
+      // Try to create the working directory if it doesn't exist
+      try {
+        await ensureDirectory(this.workingDirectory);
+        logger.debug('Created working directory', { workingDirectory: this.workingDirectory });
+      } catch (error) {
+        throw StorageError.initializationError(
+          this.workingDirectory,
+          `Working directory does not exist and could not be created: ${this.workingDirectory}. Error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
     }
 
     // Ensure directories exist

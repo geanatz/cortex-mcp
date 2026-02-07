@@ -43,6 +43,7 @@
   },
   "files": [
     "dist/**/*",
+    "!dist/.tsbuildinfo",
     "README.md",
     "LICENSE"
   ],
@@ -52,5 +53,8 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

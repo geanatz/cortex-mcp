@@ -12,6 +12,22 @@ An MCP (Model Context Protocol) server for managing task-based workflows with ar
 
 ## Installation
 
+### Using npx (Recommended)
+
+Run the latest version without installing:
+
+```bash
+npx -y @geanatz/cortex-mcp@latest
+```
+
+### Global Installation
+
+```bash
+npm install -g @geanatz/cortex-mcp
+```
+
+### Local Installation
+
 ```bash
 npm install @geanatz/cortex-mcp
 ```
@@ -26,6 +42,41 @@ cortex-mcp
 
 # Global mode (stores in ~/.cortex/)
 cortex-mcp --claude
+```
+
+### MCP Configuration
+
+Add to your MCP settings (e.g., Claude Desktop, Cursor, etc.):
+
+```json
+{
+  "cortex": {
+    "type": "local",
+    "enabled": true,
+    "command": [
+      "npx",
+      "-y",
+      "@geanatz/cortex-mcp@latest"
+    ]
+  }
+}
+```
+
+Or for global mode:
+
+```json
+{
+  "cortex": {
+    "type": "local",
+    "enabled": true,
+    "command": [
+      "npx",
+      "-y",
+      "@geanatz/cortex-mcp@latest",
+      "--claude"
+    ]
+  }
+}
 ```
 
 ### Creating Tasks

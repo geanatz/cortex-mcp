@@ -13,12 +13,19 @@ export interface StorageConfig {
  * Parse command-line arguments to determine storage configuration
  */
 export function parseCommandLineArgs(): StorageConfig {
-  const args = process.argv.slice(2);
-  const useGlobalDirectory = args.includes('--claude');
-  
-  return {
-    useGlobalDirectory
-  };
+  try {
+    const args = process.argv.slice(2);
+    const useGlobalDirectory = args.includes('--claude');
+    
+    return {
+      useGlobalDirectory
+    };
+  } catch (error) {
+    // Default to project-specific mode if there's any issue parsing args
+    return {
+      useGlobalDirectory: false
+    };
+  }
 }
 
 /**
